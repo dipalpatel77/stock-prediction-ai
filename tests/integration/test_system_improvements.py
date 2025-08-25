@@ -23,7 +23,7 @@ def test_non_interactive_mode():
         print(f"\n📊 Testing: {ticker} {mode} {days} days")
         
         # Simulate command line arguments
-        sys.argv = ['test_improvements.py', ticker, mode, str(days)]
+        sys.argv = ['test_system_improvements.py', ticker, mode, str(days)]
         
         try:
             # Import and run the main function
@@ -34,7 +34,7 @@ def test_non_interactive_mode():
             print(f"❌ Non-interactive test failed for {ticker}: {e}")
     
     # Reset sys.argv
-    sys.argv = ['test_improvements.py']
+    sys.argv = ['test_system_improvements.py']
 
 def test_data_loading_fallback():
     """Test data loading with multiple fallback sources."""

@@ -21,12 +21,14 @@ An advanced machine learning-based stock prediction system that combines multipl
 ## 🛠️ Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone <your-repo-url>
    cd ai-stock-predictor
    ```
 
 2. **Create a virtual environment**
+
    ```bash
    python -m venv venv
    # On Windows
@@ -36,6 +38,7 @@ An advanced machine learning-based stock prediction system that combines multipl
    ```
 
 3. **Install dependencies**
+
    ```bash
    pip install -r requirements.txt
    ```
@@ -64,6 +67,7 @@ The script will create a `.env` file with your credentials. **Never commit this 
 ### Quick Start
 
 For a simple prediction on RELIANCE stock:
+
 ```bash
 python quick_reliance_prediction.py
 ```
@@ -71,6 +75,7 @@ python quick_reliance_prediction.py
 ### Comprehensive Analysis
 
 For detailed analysis with multiple timeframes:
+
 ```bash
 python comprehensive_prediction_runner.py
 ```
@@ -98,37 +103,77 @@ from partC_strategy.backtest import BacktestEngine
 
 backtest = BacktestEngine()
 results = backtest.run_backtest(
+    strategy="moving_average_crossover",
     symbol="RELIANCE",
     start_date="2023-01-01",
-    end_date="2024-01-01",
-    strategy="enhanced_ensemble"
+    end_date="2024-01-01"
 )
+```
+
+## 🧪 Testing
+
+The project includes a comprehensive test suite organized in the `tests/` directory:
+
+### Running Tests
+
+```bash
+# Run all tests
+python tests/run_all_tests.py
+
+# Run specific test types
+python tests/run_all_tests.py --type unit
+python tests/run_all_tests.py --type integration
+python tests/run_all_tests.py --type performance
+
+# Run with verbose output
+python tests/run_all_tests.py --verbose
+
+# Windows batch file
+tests\run_tests.bat
+```
+
+### Test Structure
+
+- **Unit Tests** (`tests/unit/`): Individual component testing
+- **Integration Tests** (`tests/integration/`): System integration testing
+- **Performance Tests** (`tests/performance/`): Performance and load testing
+- **Test Utilities** (`tests/utils/`): Helper functions and mock data
+
+See `tests/README.md` for detailed testing documentation.
+symbol="RELIANCE",
+start_date="2023-01-01",
+end_date="2024-01-01",
+strategy="enhanced_ensemble"
+)
+
 ```
 
 ## 📁 Project Structure
 
 ```
+
 ai-stock-predictor/
-├── analysis_modules/          # Analysis components
-│   ├── long_term_analyzer.py
-│   ├── mid_term_analyzer.py
-│   └── short_term_analyzer.py
-├── partA_preprocessing/       # Data preprocessing
-│   ├── data_loader.py
-│   └── preprocess.py
-├── partB_model/              # ML models
-│   ├── enhanced_model_builder.py
-│   └── enhanced_training.py
-├── partC_strategy/           # Trading strategies
-│   ├── backtest.py
-│   ├── balance_sheet_analyzer.py
-│   └── strategy_implementations/
-├── data/                     # Data storage
-├── models/                   # Trained models
-├── logs/                     # Log files
-├── notebooks/                # Jupyter notebooks
-└── scripts/                  # Utility scripts
-```
+├── analysis_modules/ # Analysis components
+│ ├── long_term_analyzer.py
+│ ├── mid_term_analyzer.py
+│ └── short_term_analyzer.py
+├── partA_preprocessing/ # Data preprocessing
+│ ├── data_loader.py
+│ └── preprocess.py
+├── partB_model/ # ML models
+│ ├── enhanced_model_builder.py
+│ └── enhanced_training.py
+├── partC_strategy/ # Trading strategies
+│ ├── backtest.py
+│ ├── balance_sheet_analyzer.py
+│ └── strategy_implementations/
+├── data/ # Data storage
+├── models/ # Trained models
+├── logs/ # Log files
+├── notebooks/ # Jupyter notebooks
+└── scripts/ # Utility scripts
+
+````
 
 ## 🔍 Key Components
 
@@ -170,7 +215,7 @@ For the complete list, run:
 ```bash
 python angel_one_config.py
 # Choose option 3: Show Supported Stocks
-```
+````
 
 ## 🎯 Prediction Types
 
@@ -181,6 +226,7 @@ python angel_one_config.py
 ## 📊 Model Performance
 
 The system uses ensemble methods combining:
+
 - Gradient Boosting (CatBoost)
 - Random Forest
 - Neural Networks
@@ -202,11 +248,13 @@ The system uses ensemble methods combining:
 ### Common Issues
 
 1. **API Connection Errors**
+
    - Verify your Angel One credentials
    - Check your internet connection
    - Ensure API limits aren't exceeded
 
 2. **Model Loading Errors**
+
    - Ensure all dependencies are installed
    - Check if model files exist in the models/ directory
 
@@ -217,6 +265,7 @@ The system uses ensemble methods combining:
 ## 📝 Logging
 
 The system generates detailed logs in the `logs/` directory. Check these files for debugging:
+
 - `prediction.log`: Prediction execution logs
 - `backtest.log`: Backtesting results
 - `error.log`: Error messages
@@ -236,6 +285,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 📞 Support
 
 For issues and questions:
+
 1. Check the documentation in the `docs/` folder
 2. Review the troubleshooting section
 3. Open an issue on GitHub
@@ -249,4 +299,5 @@ For issues and questions:
 ---
 
 **Disclaimer**: This software is for educational and research purposes only. The authors are not responsible for any financial losses incurred through the use of this software. Always consult with a qualified financial advisor before making investment decisions.
+
 # ai-stock-predictor

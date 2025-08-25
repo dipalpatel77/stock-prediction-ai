@@ -14,7 +14,7 @@ echo Running improvements test...
 echo.
 
 REM Run the test script
-python test_improvements.py
+python tests\integration\test_system_improvements.py
 
 echo.
 echo ========================================
