@@ -249,3 +249,4 @@ For issues and questions:
 ---
 
 **Disclaimer**: This software is for educational and research purposes only. The authors are not responsible for any financial losses incurred through the use of this software. Always consult with a qualified financial advisor before making investment decisions.
+# ai-stock-predictor
