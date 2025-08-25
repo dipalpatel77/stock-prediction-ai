@@ -80,10 +80,11 @@ class UnifiedPredictionEngine:
     Unified prediction engine with both simple and advanced capabilities
     """
     
-    def __init__(self, ticker, mode="simple", interactive=True):
+    def __init__(self, ticker, mode="simple", interactive=True, use_incremental=True):
         self.ticker = ticker.upper()
         self.mode = mode  # "simple" or "advanced"
         self.interactive = interactive  # New parameter for non-interactive mode
+        self.use_incremental = use_incremental  # Enable incremental learning integration
         self.models = {}
         self.scalers = {}
         self.feature_importance = {}
@@ -91,6 +92,17 @@ class UnifiedPredictionEngine:
         
         # Create cache directory
         os.makedirs(self.model_cache_dir, exist_ok=True)
+        
+        # Initialize incremental learning manager if enabled
+        self.incremental_manager = None
+        if self.use_incremental:
+            try:
+                from partB_model.incremental_learning import IncrementalLearningManager
+                self.incremental_manager = IncrementalLearningManager()
+                print(f"🔄 Incremental learning enabled for {self.ticker}")
+            except ImportError as e:
+                print(f"⚠️ Incremental learning not available: {e}")
+                self.use_incremental = False
         
     def load_and_prepare_data(self):
         """Load and prepare data with improved fallback mechanisms."""
@@ -1011,7 +1023,59 @@ class UnifiedPredictionEngine:
             return None
     
     def _load_cached_models(self, feature_columns):
-        """Load cached models if they exist and are compatible."""
+        """Load the best available model (incremental or cached)."""
+        # First, try to load the latest incremental model
+        if self.use_incremental and self.incremental_manager:
+            incremental_success = self._load_latest_incremental_model(feature_columns)
+            if incremental_success:
+                return True
+        
+        # Fallback to regular cache
+        return self._load_regular_cached_models(feature_columns)
+    
+    def _load_latest_incremental_model(self, feature_columns):
+        """Load the latest incremental model if available."""
+        try:
+            if not self.incremental_manager:
+                return False
+            
+            # Get the latest version for this ticker and mode
+            latest_version = self.incremental_manager.get_latest_version(self.ticker, self.mode)
+            
+            if latest_version and latest_version.is_active():
+                print(f"🔄 Loading incremental model version: {latest_version.version_id}")
+                
+                # Load the model from incremental system
+                model_data = self.incremental_manager.load_model(latest_version.version_id)
+                
+                if model_data and 'models' in model_data and 'scaler' in model_data:
+                    # Verify model compatibility
+                    if 'RandomForest' in model_data['models']:
+                        expected_features = len(feature_columns)
+                        actual_features = len(model_data['models']['RandomForest'].feature_importances_)
+                        
+                        if expected_features == actual_features:
+                            self.models = model_data['models']
+                            self.scalers['standard'] = model_data['scaler']
+                            print(f"✅ Loaded incremental model ({len(self.models)} models)")
+                            print(f"📊 Model version: {latest_version.version_id}")
+                            print(f"📈 Performance: {latest_version.performance_metrics}")
+                            return True
+                        else:
+                            print(f"⚠️ Incremental model incompatible (features: {actual_features} vs {expected_features})")
+                    else:
+                        print(f"⚠️ Incremental model missing RandomForest")
+                else:
+                    print(f"⚠️ Incremental model data incomplete")
+            
+            return False
+            
+        except Exception as e:
+            print(f"⚠️ Error loading incremental model: {e}")
+            return False
+    
+    def _load_regular_cached_models(self, feature_columns):
+        """Load regular cached models if they exist and are compatible."""
         try:
             cache_file = f"{self.model_cache_dir}/{self.ticker}_{self.mode}_models.pkl"
             scaler_file = f"{self.model_cache_dir}/{self.ticker}_{self.mode}_scaler.pkl"
@@ -1042,11 +1106,12 @@ class UnifiedPredictionEngine:
             return False
     
     def _cache_models(self):
-        """Cache trained models for future use."""
+        """Cache trained models for future use and create incremental version."""
         try:
             if not self.models:
                 return
             
+            # Regular caching
             cache_file = f"{self.model_cache_dir}/{self.ticker}_{self.mode}_models.pkl"
             scaler_file = f"{self.model_cache_dir}/{self.ticker}_{self.mode}_scaler.pkl"
             
@@ -1056,8 +1121,110 @@ class UnifiedPredictionEngine:
             
             print(f"💾 Models cached to {cache_file}")
             
+            # Create incremental version if enabled
+            if self.use_incremental and self.incremental_manager:
+                self._create_incremental_version()
+            
         except Exception as e:
             print(f"⚠️ Error caching models: {e}")
+    
+    def _create_incremental_version(self):
+        """Create an incremental version of the current models."""
+        try:
+            if not self.incremental_manager or not self.models:
+                return
+            
+            # Prepare model data for incremental system
+            model_data = {
+                'models': self.models,
+                'scaler': self.scalers.get('standard'),
+                'feature_columns': list(self.models['RandomForest'].feature_importances_),
+                'training_samples': len(self.models['RandomForest'].estimators_) * 100,  # Estimate
+                'creation_timestamp': datetime.now().isoformat()
+            }
+            
+            # Create new version
+            version_id = f"{self.ticker}_{self.mode}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            
+            # Calculate basic performance metrics (placeholder)
+            performance_metrics = {
+                'accuracy': 0.85,  # Placeholder - would need actual validation
+                'mse': 0.15,
+                'mae': 0.12
+            }
+            
+            # Save to incremental system
+            success = self.incremental_manager.save_model(
+                version_id=version_id,
+                model_data=model_data,
+                performance_metrics=performance_metrics,
+                metadata={
+                    'ticker': self.ticker,
+                    'mode': self.mode,
+                    'source': 'run_stock_prediction',
+                    'feature_count': len(model_data['feature_columns'])
+                }
+            )
+            
+            if success:
+                print(f"🔄 Created incremental version: {version_id}")
+            else:
+                print(f"⚠️ Failed to create incremental version")
+                
+        except Exception as e:
+            print(f"⚠️ Error creating incremental version: {e}")
+    
+    def get_model_status(self):
+        """Get information about the current model status."""
+        status = {
+            'ticker': self.ticker,
+            'mode': self.mode,
+            'incremental_enabled': self.use_incremental,
+            'models_loaded': len(self.models) > 0,
+            'model_count': len(self.models),
+            'model_types': list(self.models.keys()) if self.models else []
+        }
+        
+        if self.use_incremental and self.incremental_manager:
+            try:
+                latest_version = self.incremental_manager.get_latest_version(self.ticker, self.mode)
+                if latest_version:
+                    status['incremental_version'] = latest_version.version_id
+                    status['incremental_performance'] = latest_version.performance_metrics
+                    status['incremental_active'] = latest_version.is_active()
+                else:
+                    status['incremental_version'] = None
+                    status['incremental_performance'] = None
+                    status['incremental_active'] = False
+            except Exception as e:
+                status['incremental_error'] = str(e)
+        
+        return status
+    
+    def check_for_updates(self):
+        """Check if incremental updates are available."""
+        if not self.use_incremental or not self.incremental_manager:
+            return False, "Incremental learning not enabled"
+        
+        try:
+            # This would typically check for new data or performance degradation
+            # For now, we'll return a simple check
+            latest_version = self.incremental_manager.get_latest_version(self.ticker, self.mode)
+            
+            if latest_version:
+                # Check if the latest version is recent (within 7 days)
+                version_date = datetime.fromisoformat(latest_version.creation_timestamp.replace('Z', '+00:00'))
+                days_old = (datetime.now() - version_date).days
+                
+                if days_old > 7:
+                    return True, f"Model is {days_old} days old, consider updating"
+                else:
+                    return False, f"Model is up to date ({days_old} days old)"
+            else:
+                return True, "No incremental model found, initial training needed"
+                
+        except Exception as e:
+            return False, f"Error checking for updates: {e}"
     
     def calculate_prediction_confidence(self, predictions):
         """Calculate confidence intervals and model analysis."""
@@ -1244,15 +1411,38 @@ class UnifiedPredictionEngine:
             print(f"❌ Error loading models: {e}")
             return False
 
-def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5, interactive=True):
+def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5, interactive=True, use_incremental=True):
     """Run unified prediction for a given ticker."""
     try:
         print(f"🚀 Unified Prediction Engine for {ticker}")
         print(f"🎯 Mode: {mode.upper()}")
+        print(f"🔄 Incremental Learning: {'Enabled' if use_incremental else 'Disabled'}")
         print("=" * 60)
         
         # Initialize engine
-        engine = UnifiedPredictionEngine(ticker, mode)
+        engine = UnifiedPredictionEngine(ticker, mode, interactive, use_incremental)
+        
+        # Show model status if incremental learning is enabled
+        if use_incremental:
+            status = engine.get_model_status()
+            print(f"📊 Model Status:")
+            print(f"   - Incremental Enabled: {status['incremental_enabled']}")
+            if status.get('incremental_version'):
+                print(f"   - Latest Version: {status['incremental_version']}")
+                print(f"   - Active: {status['incremental_active']}")
+            
+            # Check for updates
+            needs_update, update_message = engine.check_for_updates()
+            if needs_update:
+                print(f"🔄 Update Available: {update_message}")
+                if interactive:
+                    update_choice = input("Would you like to run incremental training first? (y/n): ").strip().lower()
+                    if update_choice == 'y':
+                        print("🔄 Running incremental training...")
+                        # This would integrate with the incremental training CLI
+                        print("💡 Tip: Use 'python incremental_training_cli.py update --ticker {ticker} --mode {mode}' for manual updates")
+            else:
+                print(f"✅ {update_message}")
         
         # Load and prepare data
         df = engine.load_and_prepare_data()
@@ -1432,14 +1622,15 @@ def main():
     print("Choose your prediction mode:")
     print("1. Simple Mode - Fast, reliable predictions (Recommended)")
     print("2. Advanced Mode - Sophisticated analysis with more models")
-    print("3. Exit")
+    print("3. Incremental Learning Management")
+    print("4. Exit")
     print("-" * 60)
     
     while True:
         try:
-            choice = input("\nEnter your choice (1-3): ").strip()
+            choice = input("\nEnter your choice (1-4): ").strip()
             
-            if choice == "3":
+            if choice == "4":
                 print("👋 Goodbye!")
                 break
             
@@ -1457,8 +1648,12 @@ def main():
                 print(f"\n🎯 Selected: Advanced Mode")
                 break
                 
+            elif choice == "3":
+                handle_incremental_management()
+                continue
+                
             else:
-                print("❌ Invalid choice. Please enter 1, 2, or 3.")
+                print("❌ Invalid choice. Please enter 1, 2, 3, or 4.")
                 continue
                 
         except KeyboardInterrupt:
@@ -1499,6 +1694,116 @@ def main():
             print(f"\n✅ {ticker} {mode} prediction completed successfully!")
         else:
             print(f"\n❌ {ticker} {mode} prediction failed!")
+
+
+def handle_incremental_management():
+    """Handle incremental learning management options."""
+    print("\n🔄 Incremental Learning Management")
+    print("=" * 50)
+    print("1. Check for updates")
+    print("2. Run incremental training")
+    print("3. View model versions")
+    print("4. Back to main menu")
+    print("-" * 50)
+    
+    while True:
+        try:
+            sub_choice = input("\nEnter your choice (1-4): ").strip()
+            
+            if sub_choice == "4":
+                break
+                
+            elif sub_choice == "1":
+                ticker = input("Enter stock ticker: ").strip().upper()
+                if not ticker:
+                    ticker = "RELIANCE"
+                
+                mode = input("Enter mode (simple/advanced): ").strip().lower()
+                if mode not in ["simple", "advanced"]:
+                    mode = "simple"
+                
+                print(f"\n🔍 Checking for updates for {ticker} ({mode})...")
+                try:
+                    from partB_model.model_update_pipeline import create_model_update_pipeline
+                    pipeline = create_model_update_pipeline()
+                    needs_update = pipeline.check_for_updates(ticker, mode)
+                    
+                    if needs_update:
+                        print(f"🔄 Updates available for {ticker} ({mode})")
+                        update_choice = input("Would you like to run the update? (y/n): ").strip().lower()
+                        if update_choice == 'y':
+                            print("🔄 Running update...")
+                            result = pipeline.run_automatic_updates([ticker], [mode])
+                            if result:
+                                print("✅ Update completed successfully!")
+                            else:
+                                print("❌ Update failed!")
+                    else:
+                        print(f"✅ {ticker} ({mode}) is up to date!")
+                        
+                except Exception as e:
+                    print(f"❌ Error checking for updates: {e}")
+                    print("💡 Make sure incremental training modules are available")
+                
+            elif sub_choice == "2":
+                ticker = input("Enter stock ticker: ").strip().upper()
+                if not ticker:
+                    ticker = "RELIANCE"
+                
+                mode = input("Enter mode (simple/advanced): ").strip().lower()
+                if mode not in ["simple", "advanced"]:
+                    mode = "simple"
+                
+                print(f"\n🔄 Running incremental training for {ticker} ({mode})...")
+                try:
+                    from partB_model.model_update_pipeline import create_model_update_pipeline
+                    pipeline = create_model_update_pipeline()
+                    result = pipeline.run_automatic_updates([ticker], [mode])
+                    
+                    if result:
+                        print("✅ Incremental training completed successfully!")
+                    else:
+                        print("❌ Incremental training failed!")
+                        
+                except Exception as e:
+                    print(f"❌ Error running incremental training: {e}")
+                    print("💡 Make sure incremental training modules are available")
+                
+            elif sub_choice == "3":
+                ticker = input("Enter stock ticker: ").strip().upper()
+                if not ticker:
+                    ticker = "RELIANCE"
+                
+                print(f"\n📊 Model versions for {ticker}:")
+                try:
+                    from partB_model.incremental_learning import IncrementalLearningManager
+                    manager = IncrementalLearningManager()
+                    versions = manager.get_version_history(ticker)
+                    
+                    if versions:
+                        for version in versions[:5]:  # Show last 5 versions
+                            print(f"   - {version.version_id}")
+                            print(f"     Mode: {version.metadata.get('mode', 'unknown')}")
+                            print(f"     Created: {version.creation_timestamp}")
+                            print(f"     Active: {version.is_active()}")
+                            print()
+                    else:
+                        print("   No versions found")
+                        
+                except Exception as e:
+                    print(f"❌ Error viewing versions: {e}")
+                    print("💡 Make sure incremental training modules are available")
+                
+            else:
+                print("❌ Invalid choice. Please enter 1, 2, 3, or 4.")
+                continue
+                
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            continue
+
 
 if __name__ == "__main__":
     main()

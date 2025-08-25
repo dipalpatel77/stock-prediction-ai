@@ -106,26 +106,56 @@
 - **Content**: Safe deletion targets, preservation strategy
 - **Status**: ✅ **PRESERVE** - Important for maintenance
 
+#### **11. `INCREMENTAL_TRAINING_GUIDE.md`** ⭐⭐⭐⭐⭐
+
+- **Purpose**: Comprehensive guide for incremental training feature
+- **Importance**: CRITICAL - Essential for using incremental learning
+- **Content**: Setup, usage, configuration, troubleshooting
+- **Status**: ✅ **PRESERVE** - Required for incremental training
+
+#### **12. `INCREMENTAL_TRAINING_SUMMARY.md`** ⭐⭐⭐⭐
+
+- **Purpose**: Summary of incremental training implementation
+- **Importance**: HIGH - Documents feature development
+- **Content**: Implementation details, features, architecture
+- **Status**: ✅ **PRESERVE** - Important for maintenance
+
 ---
 
 ## 🧪 **TESTING FILES - PRESERVE**
 
 ### **Test Suite**
 
-#### **11. `tests/`** ⭐⭐⭐⭐⭐
+#### **13. `tests/`** ⭐⭐⭐⭐⭐
 
 - **Purpose**: Comprehensive test suite for system improvements
 - **Importance**: CRITICAL - Validates system functionality
+- **Structure**:
+  - `tests/unit/` - Individual component tests
+  - `tests/integration/` - System integration tests
+  - `tests/performance/` - Performance and load tests
+  - `tests/data/` - Data validation tests
+  - `tests/results/` - Test results and reports
+  - `tests/utils/` - Test utilities and helpers
 - **Functionality**:
   - Tests non-interactive mode
   - Tests data loading fallbacks
   - Tests model caching
   - Tests terminal interaction
   - Tests performance optimization
-- **Dependencies**: run_stock_prediction.py
+  - Tests incremental learning components
+- **Dependencies**: run_stock_prediction.py, incremental learning modules
 - **Status**: ✅ **PRESERVE** - Essential for validation
 
-#### **12. `tests/run_tests.bat`** ⭐⭐⭐⭐
+#### **14. `tests/run_all_tests.py`** ⭐⭐⭐⭐⭐
+
+- **Purpose**: Main test runner script
+- **Importance**: CRITICAL - Orchestrates all test execution
+- **Functionality**: Runs all test categories, generates reports
+- **Dependencies**: All test modules
+- **Status**: ✅ **PRESERVE** - Essential for testing
+
+#### **15. `tests/run_tests.bat`** ⭐⭐⭐⭐
 
 - **Purpose**: Windows batch script to run tests
 - **Importance**: HIGH - Easy testing on Windows
@@ -133,20 +163,34 @@
 - **Dependencies**: tests/run_all_tests.py, venv
 - **Status**: ✅ **PRESERVE** - Convenient testing tool
 
+#### **16. `tests/test_config.json`** ⭐⭐⭐⭐
+
+- **Purpose**: Test configuration and settings
+- **Importance**: HIGH - Manages test parameters
+- **Functionality**: Configures test behavior and thresholds
+- **Status**: ✅ **PRESERVE** - Important for test management
+
+#### **17. `tests/README.md`** ⭐⭐⭐⭐
+
+- **Purpose**: Test suite documentation
+- **Importance**: HIGH - Explains test structure and usage
+- **Content**: Test categories, running instructions, best practices
+- **Status**: ✅ **PRESERVE** - Important for test maintenance
+
 ---
 
 ## 📦 **CONFIGURATION FILES - PRESERVE**
 
 ### **Project Configuration**
 
-#### **13. `requirements.txt`** ⭐⭐⭐⭐⭐
+#### **18. `requirements.txt`** ⭐⭐⭐⭐⭐
 
 - **Purpose**: Python package dependencies
 - **Importance**: CRITICAL - Required for installation
 - **Content**: All required Python packages and versions
 - **Status**: ✅ **PRESERVE** - Essential for setup
 
-#### **14. `.env`** ⭐⭐⭐⭐⭐
+#### **19. `.env`** ⭐⭐⭐⭐⭐
 
 - **Purpose**: Environment variables and API keys
 - **Importance**: CRITICAL - Contains sensitive configuration
@@ -154,14 +198,14 @@
 - **Status**: ✅ **PRESERVE** - Contains sensitive data
 - **Note**: Should be in .gitignore
 
-#### **15. `.gitignore`** ⭐⭐⭐⭐
+#### **20. `.gitignore`** ⭐⭐⭐⭐
 
 - **Purpose**: Git ignore patterns
 - **Importance**: HIGH - Prevents committing sensitive files
 - **Content**: Patterns for files to ignore in git
 - **Status**: ✅ **PRESERVE** - Important for version control
 
-#### **16. `LICENSE`** ⭐⭐⭐⭐
+#### **21. `LICENSE`** ⭐⭐⭐⭐
 
 - **Purpose**: Project license information
 - **Importance**: HIGH - Legal requirements
@@ -174,7 +218,7 @@
 
 ### **Data Preprocessing**
 
-#### **17. `partA_preprocessing/`** ⭐⭐⭐⭐⭐
+#### **22. `partA_preprocessing/`** ⭐⭐⭐⭐⭐
 
 - **Purpose**: Data preprocessing and loading modules
 - **Importance**: CRITICAL - Core data processing functionality
@@ -187,7 +231,7 @@
 
 ### **Model Building**
 
-#### **18. `partB_model/`** ⭐⭐⭐⭐⭐
+#### **23. `partB_model/`** ⭐⭐⭐⭐⭐
 
 - **Purpose**: Machine learning model building modules
 - **Importance**: CRITICAL - Core ML functionality
@@ -195,12 +239,14 @@
   - Model training scripts
   - Model evaluation tools
   - Hyperparameter optimization
+  - `incremental_learning.py` - Incremental learning and model versioning
+  - `model_update_pipeline.py` - Model update orchestration
 - **Dependencies**: ML libraries, data preprocessing
 - **Status**: ✅ **PRESERVE** - Essential for ML functionality
 
 ### **Strategy Analysis**
 
-#### **19. `partC_strategy/`** ⭐⭐⭐⭐⭐
+#### **24. `partC_strategy/`** ⭐⭐⭐⭐⭐
 
 - **Purpose**: Trading strategy and analysis modules
 - **Importance**: CRITICAL - Core strategy functionality
@@ -213,7 +259,7 @@
 
 ### **Analysis Modules**
 
-#### **20. `analysis_modules/`** ⭐⭐⭐⭐
+#### **25. `analysis_modules/`** ⭐⭐⭐⭐
 
 - **Purpose**: Specialized analysis components
 - **Importance**: HIGH - Advanced analysis functionality
@@ -224,13 +270,28 @@
 - **Dependencies**: Core modules, data
 - **Status**: ✅ **PRESERVE** - Important for analysis
 
+### **Incremental Training**
+
+#### **26. `incremental_training_cli.py`** ⭐⭐⭐⭐⭐
+
+- **Purpose**: Command-line interface for incremental training
+- **Importance**: CRITICAL - Essential for managing incremental learning
+- **Functionality**:
+  - Check for model updates
+  - Perform incremental training
+  - Manage model versions
+  - Rollback to previous versions
+  - Clean up old versions
+- **Dependencies**: partB_model modules, incremental learning components
+- **Status**: ✅ **PRESERVE** - Essential for incremental training
+
 ---
 
 ## 📊 **DATA & MODELS - PRESERVE**
 
 ### **Data Storage**
 
-#### **21. `data/`** ⭐⭐⭐⭐⭐
+#### **27. `data/`** ⭐⭐⭐⭐⭐
 
 - **Purpose**: Stock data storage directory
 - **Importance**: CRITICAL - Contains all stock data files
@@ -242,7 +303,7 @@
 
 ### **Model Storage**
 
-#### **22. `models/`** ⭐⭐⭐⭐⭐
+#### **28. `models/`** ⭐⭐⭐⭐⭐
 
 - **Purpose**: Trained model storage
 - **Importance**: CRITICAL - Contains trained ML models
@@ -258,21 +319,21 @@
 
 ### **Development Tools**
 
-#### **23. `scripts/`** ⭐⭐⭐
+#### **29. `scripts/`** ⭐⭐⭐
 
 - **Purpose**: Utility scripts for development
 - **Importance**: MEDIUM - Development convenience
 - **Contents**: Helper scripts, automation tools
 - **Status**: ⚠️ **VERIFY BEFORE DELETE** - Check contents first
 
-#### **24. `notebooks/`** ⭐⭐⭐
+#### **30. `notebooks/`** ⭐⭐⭐
 
 - **Purpose**: Jupyter notebooks for analysis
 - **Importance**: MEDIUM - Research and development
 - **Contents**: Analysis notebooks, experiments
 - **Status**: ⚠️ **VERIFY BEFORE DELETE** - Check contents first
 
-#### **25. `logs/`** ⭐⭐
+#### **31. `logs/`** ⭐⭐
 
 - **Purpose**: Application log files
 - **Importance**: LOW - Debugging and monitoring
@@ -285,28 +346,28 @@
 
 ### **IDE and Build Files**
 
-#### **26. `.vscode/`** ⭐⭐
+#### **32. `.vscode/`** ⭐⭐
 
 - **Purpose**: VS Code configuration
 - **Importance**: LOW - IDE-specific settings
 - **Contents**: VS Code settings, launch configurations
 - **Status**: 🔄 **SAFE TO DELETE** - Can be regenerated
 
-#### **27. `venv/`** ⭐⭐
+#### **33. `venv/`** ⭐⭐
 
 - **Purpose**: Python virtual environment
 - **Importance**: LOW - Can be recreated
 - **Contents**: Python packages, environment
 - **Status**: 🔄 **SAFE TO DELETE** - Can be recreated with requirements.txt
 
-#### **28. `__pycache__/`** ⭐
+#### **34. `__pycache__/`** ⭐
 
 - **Purpose**: Python bytecode cache
 - **Importance**: NONE - Temporary files
 - **Contents**: Compiled Python files
 - **Status**: 🔄 **SAFE TO DELETE** - Auto-generated
 
-#### **29. `catboost_info/`** ⭐
+#### **35. `catboost_info/`** ⭐
 
 - **Purpose**: CatBoost model training logs
 - **Importance**: NONE - Temporary training files
@@ -381,12 +442,14 @@ angel_one_data_downloader.py
 README.md
 RUNNING_INSTRUCTIONS.md
 ANGEL_ONE_SETUP.md
+INCREMENTAL_TRAINING_GUIDE.md
 requirements.txt
 .env
 tests/run_all_tests.py
 partA_preprocessing/
 partB_model/
 partC_strategy/
+incremental_training_cli.py
 data/
 models/
 ```
@@ -412,9 +475,10 @@ notebooks/
 
 ## 📝 **MAINTENANCE NOTES**
 
-- **Last Updated**: August 25, 2025
+- **Last Updated**: January 2025
 - **Purpose**: Prevent accidental file deletions
 - **Usage**: Reference before any cleanup operations
 - **Updates**: Update this guide when adding new files
+- **Recent Updates**: Added incremental training files, reorganized test structure
 
 **Remember**: When in doubt, preserve the file. It's better to keep a potentially unnecessary file than to lose an important one.
