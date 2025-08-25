@@ -12,6 +12,7 @@ from datetime import datetime
 import warnings
 import threading
 import time
+import sys
 from dotenv import load_dotenv
 warnings.filterwarnings('ignore')
 
@@ -79,29 +80,27 @@ class UnifiedPredictionEngine:
     Unified prediction engine with both simple and advanced capabilities
     """
     
-    def __init__(self, ticker, mode="simple"):
+    def __init__(self, ticker, mode="simple", interactive=True):
         self.ticker = ticker.upper()
         self.mode = mode  # "simple" or "advanced"
+        self.interactive = interactive  # New parameter for non-interactive mode
         self.models = {}
         self.scalers = {}
         self.feature_importance = {}
+        self.model_cache_dir = "models/cache"
+        
+        # Create cache directory
+        os.makedirs(self.model_cache_dir, exist_ok=True)
         
     def load_and_prepare_data(self):
-        """Load and prepare data with appropriate features."""
+        """Load and prepare data with improved fallback mechanisms."""
         try:
-            # First try to load enhanced data
-            data_file = f"data/{self.ticker}_partA_partC_enhanced.csv"
-            if os.path.exists(data_file):
-                print(f"📊 Loading enhanced data from: {data_file}")
-                df = pd.read_csv(data_file)
-                print(f"📈 Original data shape: {df.shape}")
-            else:
-                # Try to load raw data from Angel One or other sources
-                df = self._load_raw_data()
-                if df is None:
-                    print(f"❌ No data found for {self.ticker}")
-                    return None
-                print(f"📈 Raw data shape: {df.shape}")
+            # Enhanced data loading with multiple fallbacks
+            df = self._load_data_with_fallbacks()
+            
+            if df is None:
+                print(f"❌ No data found for {self.ticker} from any source")
+                return None
             
             # Clean and prepare data
             df = self._clean_data(df)
@@ -111,48 +110,153 @@ class UnifiedPredictionEngine:
             else:
                 df = self._add_advanced_features(df)
             
-            print(f"📈 Enhanced data shape: {df.shape}")
+            print(f"📈 Final data shape: {df.shape}")
             return df
             
         except Exception as e:
             print(f"❌ Error loading data: {e}")
             return None
     
-    def _load_raw_data(self):
-        """Load raw data from various sources."""
-        try:
-            # Try different data sources
-            sources = [
-                f"data/{self.ticker}_one_day_data.csv",  # Angel One data
-                f"data/{self.ticker}_raw_data.csv",      # Existing raw data
-                f"data/{self.ticker}_preprocessed.csv"   # Preprocessed data
-            ]
-            
-            for source in sources:
-                if os.path.exists(source):
+    def _load_data_with_fallbacks(self):
+        """Load data with multiple fallback sources."""
+        # Priority order for data sources
+        data_sources = [
+            # 1. Enhanced data (best quality)
+            f"data/{self.ticker}_partA_partC_enhanced.csv",
+            # 2. Preprocessed data
+            f"data/preprocessed_{self.ticker}.csv",
+            # 3. Angel One data
+            f"data/{self.ticker}_one_day_data.csv",
+            # 4. Raw data
+            f"data/{self.ticker}_raw_data.csv",
+            # 5. Any CSV with ticker name
+            f"data/{self.ticker}.csv"
+        ]
+        
+        for source in data_sources:
+            if os.path.exists(source):
+                try:
                     print(f"📊 Loading data from: {source}")
                     df = pd.read_csv(source)
                     
-                    # Handle different column formats
-                    if 'Date' in df.columns:
-                        df['Date'] = pd.to_datetime(df['Date'])
-                        df.set_index('Date', inplace=True)
-                    elif 'Unnamed: 0' in df.columns:
-                        df['Date'] = pd.to_datetime(df['Unnamed: 0'])
-                        df.set_index('Date', inplace=True)
-                        df = df.drop('Unnamed: 0', axis=1, errors='ignore')
+                    # Handle different CSV formats
+                    df = self._standardize_dataframe(df)
                     
-                    # Ensure we have the required columns
-                    required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-                    if all(col in df.columns for col in required_cols):
+                    if df is not None and len(df) > 10:  # Minimum data requirement
+                        print(f"✅ Successfully loaded {len(df)} records from {source}")
                         return df
+                        
+                except Exception as e:
+                    print(f"⚠️ Failed to load {source}: {e}")
+                    continue
+        
+        # If no existing data, try to download
+        print(f"📡 No existing data found. Attempting to download for {self.ticker}...")
+        return self._download_fresh_data()
+    
+    def _standardize_dataframe(self, df):
+        """Standardize dataframe format regardless of source."""
+        try:
+            # Handle different date column names
+            date_columns = ['Date', 'date', 'DATE', 'Unnamed: 0', 'index']
+            date_col = None
             
-            # If no existing data found, try to download from Angel One
-            print(f"📡 Attempting to download data for {self.ticker}...")
-            return self._download_angel_one_data()
+            for col in date_columns:
+                if col in df.columns:
+                    date_col = col
+                    break
+            
+            if date_col:
+                # Convert to datetime and set as index
+                df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+                df = df.dropna(subset=[date_col])
+                df.set_index(date_col, inplace=True)
+                
+                # Remove the original date column if it's not the index
+                if date_col != df.index.name:
+                    df = df.drop(date_col, axis=1, errors='ignore')
+            
+            # Remove unnamed columns
+            unnamed_cols = [col for col in df.columns if 'Unnamed' in col or 'unnamed' in col]
+            if unnamed_cols:
+                df = df.drop(unnamed_cols, axis=1)
+            
+            # Standardize column names
+            column_mapping = {
+                'Open': 'Open', 'open': 'Open', 'OPEN': 'Open',
+                'High': 'High', 'high': 'High', 'HIGH': 'High',
+                'Low': 'Low', 'low': 'Low', 'LOW': 'Low',
+                'Close': 'Close', 'close': 'Close', 'CLOSE': 'Close',
+                'Volume': 'Volume', 'volume': 'Volume', 'VOLUME': 'Volume',
+                'Adj Close': 'Adj Close', 'adj close': 'Adj Close', 'ADJ CLOSE': 'Adj Close'
+            }
+            
+            # Rename columns if needed
+            for old_name, new_name in column_mapping.items():
+                if old_name in df.columns and new_name not in df.columns:
+                    df = df.rename(columns={old_name: new_name})
+            
+            # Ensure we have at least Open, High, Low, Close
+            required_cols = ['Open', 'High', 'Low', 'Close']
+            if not all(col in df.columns for col in required_cols):
+                print(f"⚠️ Missing required columns. Found: {list(df.columns)}")
+                return None
+            
+            return df
             
         except Exception as e:
-            print(f"❌ Error loading raw data: {e}")
+            print(f"❌ Error standardizing dataframe: {e}")
+            return None
+    
+    def _download_fresh_data(self):
+        """Download fresh data from available sources."""
+        try:
+            # Try Angel One first
+            if os.getenv('ANGEL_ONE_API_KEY'):
+                print("📡 Attempting Angel One download...")
+                df = self._download_angel_one_data()
+                if df is not None:
+                    return df
+            
+            # Try yfinance as fallback
+            print("📡 Attempting yfinance download...")
+            df = self._download_yfinance_data()
+            if df is not None:
+                return df
+            
+            print("❌ No data sources available")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error downloading fresh data: {e}")
+            return None
+    
+    def _download_yfinance_data(self):
+        """Download data using yfinance as fallback."""
+        try:
+            import yfinance as yf
+            
+            # Add .NS suffix for Indian stocks if not present
+            ticker_symbol = self.ticker
+            if not ticker_symbol.endswith('.NS') and not '.' in ticker_symbol:
+                ticker_symbol = f"{ticker_symbol}.NS"
+            
+            print(f"📡 Downloading {ticker_symbol} from yfinance...")
+            stock = yf.Ticker(ticker_symbol)
+            df = stock.history(period="1y")
+            
+            if df is not None and len(df) > 10:
+                # Save the data
+                output_file = f"data/{self.ticker}_yfinance_data.csv"
+                df.to_csv(output_file)
+                print(f"💾 Saved yfinance data to: {output_file}")
+                return df
+            else:
+                print("❌ No data received from yfinance")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error downloading from yfinance: {e}")
             return None
     
     def _download_angel_one_data(self):
@@ -165,10 +269,18 @@ class UnifiedPredictionEngine:
                 print("⚠️ Angel One downloader not available. Please install required packages.")
                 return None
             
-            # Initialize downloader (you need to set up your API credentials)
+            # Check if credentials are available
+            api_key = os.getenv('ANGEL_ONE_API_KEY')
+            auth_token = os.getenv('ANGEL_ONE_AUTH_TOKEN')
+            
+            if not api_key or not auth_token:
+                print("⚠️ Angel One credentials not found in environment variables")
+                return None
+            
+            # Initialize downloader
             downloader = AngelOneDataDownloader(
-                api_key=os.getenv('ANGEL_ONE_API_KEY'),
-                auth_token=os.getenv('ANGEL_ONE_AUTH_TOKEN'),
+                api_key=api_key,
+                auth_token=auth_token,
                 client_ip=os.getenv('CLIENT_IP', '127.0.0.1'),
                 mac_address=os.getenv('MAC_ADDRESS', '00:00:00:00:00:00')
             )
@@ -176,11 +288,11 @@ class UnifiedPredictionEngine:
             # Download data
             df = downloader.get_latest_data(self.ticker, days=365, interval="ONE_DAY")
             
-            if df is not None:
+            if df is not None and len(df) > 10:
                 # Save as enhanced data for future use
                 enhanced_file = f"data/{self.ticker}_partA_partC_enhanced.csv"
                 df.to_csv(enhanced_file)
-                print(f"💾 Saved enhanced data to: {enhanced_file}")
+                print(f"💾 Saved Angel One data to: {enhanced_file}")
                 return df
             else:
                 print(f"❌ Failed to download data for {self.ticker}")
@@ -538,12 +650,25 @@ class UnifiedPredictionEngine:
             return None
     
     def train_models(self, X, y):
-        """Train models based on mode."""
+        """Train models based on mode with caching."""
         try:
+            # Check if we can load cached models first
+            if self._load_cached_models(X.columns):
+                print("✅ Loaded cached models")
+                return True
+            
+            # Train new models
             if self.mode == "simple":
-                return self._train_simple_models(X, y)
+                success = self._train_simple_models(X, y)
             else:
-                return self._train_advanced_models(X, y)
+                success = self._train_advanced_models(X, y)
+            
+            # Cache models if training was successful
+            if success:
+                self._cache_models()
+            
+            return success
+            
         except Exception as e:
             print(f"❌ Error training models: {e}")
             return False
@@ -885,6 +1010,55 @@ class UnifiedPredictionEngine:
             print(f"Warning: Error generating advanced multi-day predictions: {e}")
             return None
     
+    def _load_cached_models(self, feature_columns):
+        """Load cached models if they exist and are compatible."""
+        try:
+            cache_file = f"{self.model_cache_dir}/{self.ticker}_{self.mode}_models.pkl"
+            scaler_file = f"{self.model_cache_dir}/{self.ticker}_{self.mode}_scaler.pkl"
+            
+            if os.path.exists(cache_file) and os.path.exists(scaler_file):
+                # Check if cache is recent (less than 24 hours old)
+                cache_age = time.time() - os.path.getmtime(cache_file)
+                if cache_age < 86400:  # 24 hours
+                    models = joblib.load(cache_file)
+                    scaler = joblib.load(scaler_file)
+                    
+                    # Verify model compatibility by checking feature count
+                    if 'RandomForest' in models:
+                        expected_features = len(feature_columns)
+                        actual_features = len(models['RandomForest'].feature_importances_)
+                        if expected_features == actual_features:
+                            self.models = models
+                            self.scalers['standard'] = scaler
+                            print(f"✅ Loaded cached models ({len(models)} models)")
+                            return True
+                        else:
+                            print(f"⚠️ Cached models incompatible (features: {actual_features} vs {expected_features})")
+                
+            return False
+            
+        except Exception as e:
+            print(f"⚠️ Error loading cached models: {e}")
+            return False
+    
+    def _cache_models(self):
+        """Cache trained models for future use."""
+        try:
+            if not self.models:
+                return
+            
+            cache_file = f"{self.model_cache_dir}/{self.ticker}_{self.mode}_models.pkl"
+            scaler_file = f"{self.model_cache_dir}/{self.ticker}_{self.mode}_scaler.pkl"
+            
+            joblib.dump(self.models, cache_file)
+            if 'standard' in self.scalers:
+                joblib.dump(self.scalers['standard'], scaler_file)
+            
+            print(f"💾 Models cached to {cache_file}")
+            
+        except Exception as e:
+            print(f"⚠️ Error caching models: {e}")
+    
     def calculate_prediction_confidence(self, predictions):
         """Calculate confidence intervals and model analysis."""
         try:
@@ -1070,7 +1244,7 @@ class UnifiedPredictionEngine:
             print(f"❌ Error loading models: {e}")
             return False
 
-def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5):
+def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5, interactive=True):
     """Run unified prediction for a given ticker."""
     try:
         print(f"🚀 Unified Prediction Engine for {ticker}")
@@ -1228,6 +1402,33 @@ def main():
     """Main function with user interface."""
     print("🚀 UNIFIED STOCK PREDICTION SYSTEM")
     print("=" * 60)
+    
+    # Check for command line arguments for non-interactive mode
+    if len(sys.argv) > 1:
+        # Non-interactive mode
+        if len(sys.argv) >= 4:
+            ticker = sys.argv[1].upper()
+            mode = sys.argv[2].lower()
+            days_ahead = int(sys.argv[3])
+            
+            if mode not in ["simple", "advanced"]:
+                print("❌ Invalid mode. Use 'simple' or 'advanced'")
+                return
+            
+            if days_ahead <= 0 or days_ahead > 30:
+                print("⚠️ Days should be between 1-30. Using default: 5")
+                days_ahead = 5
+            
+            print(f"🎯 Non-interactive mode: {ticker}, {mode}, {days_ahead} days")
+            success = run_unified_prediction(ticker, mode, days_ahead, interactive=False)
+            
+            if success:
+                print(f"\n✅ {ticker} {mode} prediction completed successfully!")
+            else:
+                print(f"\n❌ {ticker} {mode} prediction failed!")
+            return
+    
+    # Interactive mode
     print("Choose your prediction mode:")
     print("1. Simple Mode - Fast, reliable predictions (Recommended)")
     print("2. Advanced Mode - Sophisticated analysis with more models")
@@ -1292,7 +1493,7 @@ def main():
         print()
         
         # Run prediction
-        success = run_unified_prediction(ticker, mode, days_ahead)
+        success = run_unified_prediction(ticker, mode, days_ahead, interactive=True)
         
         if success:
             print(f"\n✅ {ticker} {mode} prediction completed successfully!")
