@@ -11,6 +11,9 @@ An advanced machine learning-based stock prediction system that combines multipl
 - **Real-time Data**: Integration with Angel One API for live market data
 - **Backtesting**: Comprehensive strategy backtesting capabilities
 - **Risk Management**: Built-in risk assessment and position sizing
+- **🆕 Incremental Learning**: Continuous model updates and versioning
+- **🆕 Model Versioning**: Track and manage model versions with rollback capability
+- **🆕 Automatic Updates**: Smart update detection and performance-based training
 
 ## 📋 Prerequisites
 
@@ -140,6 +143,51 @@ tests\run_tests.bat
 - **Test Utilities** (`tests/utils/`): Helper functions and mock data
 
 See `tests/README.md` for detailed testing documentation.
+
+## 🔄 Incremental Training
+
+The system now supports **Incremental Learning** for continuous model improvement:
+
+### Quick Start
+
+```bash
+# Check if models need updates
+python incremental_training_cli.py check-updates --ticker RELIANCE --mode simple
+
+# Update a specific model
+python incremental_training_cli.py update --ticker RELIANCE --mode simple
+
+# Run automatic updates for multiple tickers
+python incremental_training_cli.py auto-update --tickers RELIANCE AAPL MSFT
+
+# View version history
+python incremental_training_cli.py versions --ticker RELIANCE
+```
+
+### Key Features
+
+- **🔄 Continuous Updates**: Models learn from new data without full retraining
+- **📊 Performance Tracking**: Monitor improvements with detailed metrics
+- **🔄 Version Management**: Track all model versions with rollback capability
+- **🤖 Automatic Scheduling**: Smart update detection and scheduling
+- **💾 Backup & Recovery**: Automatic backups before updates
+
+### Advanced Usage
+
+```python
+from partB_model.model_update_pipeline import ModelUpdatePipeline
+
+# Create update pipeline
+pipeline = ModelUpdatePipeline()
+
+# Run automatic updates
+results = pipeline.run_automatic_updates(['RELIANCE', 'AAPL', 'MSFT'])
+
+# Check version history
+versions = pipeline.get_model_version_history('RELIANCE', 'simple')
+```
+
+For detailed documentation, see [INCREMENTAL_TRAINING_GUIDE.md](INCREMENTAL_TRAINING_GUIDE.md).
 symbol="RELIANCE",
 start_date="2023-01-01",
 end_date="2024-01-01",
