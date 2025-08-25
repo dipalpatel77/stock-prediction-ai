@@ -1,0 +1,46 @@
+# AI Stock Predictor - Enhanced Requirements
+# Core ML and Data Science
+tensorflow>=2.10.0
+scikit-learn>=1.1.0
+pandas>=1.5.0
+numpy>=1.21.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Advanced ML Models
+xgboost>=1.6.0
+lightgbm>=3.3.0
+catboost>=1.2.0
+
+# Financial Data
+yfinance>=0.2.0
+alpha-vantage>=2.3.0
+
+# Technical Analysis
+ta>=0.10.0
+talib-binary>=0.4.0
+
+# Web Scraping and APIs
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+newsapi-python>=0.2.0
+
+# Natural Language Processing
+nltk>=3.8
+textblob>=0.17.0
+vaderSentiment>=3.3.0
+
+# Database and Storage
+sqlalchemy>=1.4.0
+joblib>=1.2.0
+
+# Utilities
+python-dotenv>=0.19.0
+tqdm>=4.64.0
+colorama>=0.4.0
+
+# API and Data Download
+requests>=2.28.0
+
+# Optional: GPU Support
+# tensorflow-gpu>=2.10.0  # Uncomment if you have GPU support
