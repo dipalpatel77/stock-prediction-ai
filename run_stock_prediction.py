@@ -833,28 +833,35 @@ class UnifiedPredictionEngine:
                     continue
             
             # Create sophisticated ensemble model
-            print("   Creating advanced ensemble model...")
+            print("   Creating adaptive ensemble model...")
             
-            # Only include models that were successfully trained
-            available_models = []
-            for name in ['RandomForest', 'GradientBoosting', 'XGBoost', 'LightGBM', 'CatBoost', 'ExtraTrees']:
-                if name in self.models:
-                    available_models.append((name.lower()[:3], self.models[name]))
+            # Create adaptive ensemble with dynamic weighting
+            adaptive_ensemble = self._create_adaptive_ensemble(X_enhanced, y)
             
-            if len(available_models) >= 2:
-                # Create ensemble with available models
-                weights = [1.0/len(available_models)] * len(available_models)  # Equal weights
-                self.models['Ensemble'] = VotingRegressor(
-                    estimators=available_models,
-                    weights=weights
-                )
-                
-                # Train ensemble
-                self.models['Ensemble'].fit(X_enhanced, y)
-                print(f"   ✅ Ensemble created with {len(available_models)} models")
+            if adaptive_ensemble is not None:
+                self.models['Ensemble'] = adaptive_ensemble
+                print(f"   ✅ Adaptive ensemble created successfully")
             else:
-                print("   ⚠️ Not enough models for ensemble, using average prediction")
-                self.models['Ensemble'] = 'average'
+                # Fallback to simple ensemble
+                available_models = []
+                for name in ['RandomForest', 'GradientBoosting', 'XGBoost', 'LightGBM', 'CatBoost', 'ExtraTrees']:
+                    if name in self.models:
+                        available_models.append((name.lower()[:3], self.models[name]))
+                
+                if len(available_models) >= 2:
+                    # Create ensemble with available models
+                    weights = [1.0/len(available_models)] * len(available_models)  # Equal weights
+                    self.models['Ensemble'] = VotingRegressor(
+                        estimators=available_models,
+                        weights=weights
+                    )
+                    
+                    # Train ensemble
+                    self.models['Ensemble'].fit(X_enhanced, y)
+                    print(f"   ✅ Fallback ensemble created with {len(available_models)} models")
+                else:
+                    print("   ⚠️ Not enough models for ensemble, using average prediction")
+                    self.models['Ensemble'] = 'average'
             
             print("✅ All advanced models trained successfully!")
             return True
@@ -921,8 +928,21 @@ class UnifiedPredictionEngine:
             for name, model in self.models.items():
                 try:
                     if name == 'Ensemble' and self.mode == "simple":
-                        # Calculate ensemble as average of other models
+                        # Calculate ensemble as weighted average of other models
                         other_preds = []
+                        other_weights = []
+                        
+                        # Use stored weights if available, otherwise equal weights
+                        if hasattr(self, 'ensemble_weights') and self.ensemble_weights:
+                            weights = self.ensemble_weights
+                        else:
+                            weights = {}
+                            model_count = len([n for n in self.models.keys() if n != 'Ensemble'])
+                            equal_weight = 1.0 / model_count
+                            for other_name in self.models.keys():
+                                if other_name != 'Ensemble':
+                                    weights[other_name] = equal_weight
+                        
                         for other_name, other_model in self.models.items():
                             if other_name != 'Ensemble':
                                 if other_name in self.scalers:
@@ -930,7 +950,15 @@ class UnifiedPredictionEngine:
                                 else:
                                     pred = other_model.predict(last_data)[0]
                                 other_preds.append(pred)
-                        predictions[name] = np.mean(other_preds)
+                                other_weights.append(weights.get(other_name, 1.0))
+                        
+                        # Calculate weighted average
+                        if other_weights and sum(other_weights) > 0:
+                            weighted_pred = np.average(other_preds, weights=other_weights)
+                        else:
+                            weighted_pred = np.mean(other_preds)
+                        
+                        predictions[name] = weighted_pred
                     else:
                         if name in self.scalers:
                             pred = model.predict(self.scalers[name].transform(last_data))[0]
@@ -1185,6 +1213,11 @@ class UnifiedPredictionEngine:
             'model_types': list(self.models.keys()) if self.models else []
         }
         
+        # Add ensemble performance information
+        if hasattr(self, 'ensemble_performance') and self.ensemble_performance:
+            status['ensemble_performance'] = self.ensemble_performance
+            status['ensemble_weights'] = getattr(self, 'ensemble_weights', {})
+        
         if self.use_incremental and self.incremental_manager:
             try:
                 latest_version = self.incremental_manager.get_latest_version(self.ticker, self.mode)
@@ -1327,6 +1360,168 @@ class UnifiedPredictionEngine:
             
         except Exception as e:
             print(f"Warning: Error analyzing pattern strength: {e}")
+            return None
+    
+    def _calculate_model_weights(self, recent_performance=None):
+        """Calculate dynamic ensemble weights based on recent performance."""
+        try:
+            if not self.models:
+                return {}
+            
+            # If no recent performance provided, use equal weights
+            if recent_performance is None:
+                model_names = [name for name in self.models.keys() if name != 'Ensemble']
+                equal_weight = 1.0 / len(model_names)
+                return {name: equal_weight for name in model_names}
+            
+            # Calculate weights based on recent performance
+            weights = {}
+            total_performance = 0
+            
+            for model_name, performance in recent_performance.items():
+                if model_name in self.models and model_name != 'Ensemble':
+                    # Convert accuracy to weight (higher accuracy = higher weight)
+                    # Add small epsilon to avoid division by zero
+                    weight = max(performance.get('accuracy', 0.5), 0.1)
+                    weights[model_name] = weight
+                    total_performance += weight
+            
+            # Normalize weights to sum to 1
+            if total_performance > 0:
+                for model_name in weights:
+                    weights[model_name] /= total_performance
+            else:
+                # Fallback to equal weights if no performance data
+                model_names = list(weights.keys())
+                equal_weight = 1.0 / len(model_names)
+                weights = {name: equal_weight for name in model_names}
+            
+            return weights
+            
+        except Exception as e:
+            print(f"Warning: Error calculating model weights: {e}")
+            # Fallback to equal weights
+            model_names = [name for name in self.models.keys() if name != 'Ensemble']
+            equal_weight = 1.0 / len(model_names)
+            return {name: equal_weight for name in model_names}
+    
+    def _evaluate_recent_performance(self, X, y, lookback_days=30):
+        """Evaluate recent performance of individual models."""
+        try:
+            if len(X) < lookback_days:
+                lookback_days = len(X) // 2
+            
+            # Use recent data for evaluation
+            X_recent = X.iloc[-lookback_days:]
+            y_recent = y.iloc[-lookback_days:]
+            
+            performance = {}
+            
+            for name, model in self.models.items():
+                if name == 'Ensemble':
+                    continue
+                
+                try:
+                    # Make predictions on recent data
+                    if name in self.scalers:
+                        X_scaled = self.scalers[name].transform(X_recent)
+                        predictions = model.predict(X_scaled)
+                    else:
+                        predictions = model.predict(X_recent)
+                    
+                    # Calculate performance metrics
+                    from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+                    
+                    mse = mean_squared_error(y_recent, predictions)
+                    mae = mean_absolute_error(y_recent, predictions)
+                    r2 = r2_score(y_recent, predictions)
+                    
+                    # Calculate directional accuracy (if price went up/down correctly)
+                    actual_direction = np.diff(y_recent.values) > 0
+                    pred_direction = np.diff(predictions) > 0
+                    directional_accuracy = np.mean(actual_direction == pred_direction)
+                    
+                    # Overall accuracy score (weighted combination)
+                    # Normalize MSE and MAE by dividing by the target mean for relative comparison
+                    target_mean = np.mean(y_recent)
+                    normalized_mse = mse / (target_mean ** 2) if target_mean != 0 else mse
+                    normalized_mae = mae / target_mean if target_mean != 0 else mae
+                    
+                    accuracy = (0.3 * max(0, 1 - normalized_mse) + 
+                               0.3 * max(0, 1 - normalized_mae) + 
+                               0.2 * max(0, r2) + 
+                               0.2 * directional_accuracy)
+                    
+                    performance[name] = {
+                        'accuracy': accuracy,
+                        'mse': mse,
+                        'mae': mae,
+                        'r2': r2,
+                        'directional_accuracy': directional_accuracy
+                    }
+                    
+                except Exception as e:
+                    print(f"Warning: Could not evaluate {name}: {e}")
+                    performance[name] = {'accuracy': 0.5}  # Default accuracy
+            
+            return performance
+            
+        except Exception as e:
+            print(f"Warning: Error evaluating recent performance: {e}")
+            return {}
+    
+    def _create_adaptive_ensemble(self, X, y):
+        """Create an adaptive ensemble with dynamic weighting."""
+        try:
+            # Evaluate recent performance
+            recent_performance = self._evaluate_recent_performance(X, y)
+            
+            # Calculate dynamic weights
+            weights = self._calculate_model_weights(recent_performance)
+            
+            if not weights:
+                print("⚠️ Could not calculate weights, using equal weights")
+                return None
+            
+            # Create ensemble with dynamic weights
+            from sklearn.ensemble import VotingRegressor
+            
+            # Prepare estimators (exclude Ensemble itself)
+            estimators = []
+            for name, model in self.models.items():
+                if name != 'Ensemble' and name in weights:
+                    # Use first 3 characters of name, ensure uniqueness
+                    short_name = name.lower()[:3]
+                    if short_name in [est[0] for est in estimators]:
+                        short_name = name.lower()[:4]  # Use 4 chars if 3 chars conflict
+                    estimators.append((short_name, model))
+            
+            if len(estimators) < 2:
+                print("⚠️ Not enough models for ensemble")
+                return None
+            
+            # Create weighted ensemble
+            ensemble_weights = [weights[name] for name, _ in estimators]
+            
+            ensemble = VotingRegressor(
+                estimators=estimators,
+                weights=ensemble_weights
+            )
+            
+            # Train the ensemble
+            ensemble.fit(X, y)
+            
+            # Store performance and weights for later use
+            self.ensemble_performance = recent_performance
+            self.ensemble_weights = weights
+            
+            print(f"✅ Created adaptive ensemble with {len(estimators)} models")
+            print(f"📊 Model weights: {weights}")
+            
+            return ensemble
+            
+        except Exception as e:
+            print(f"Warning: Error creating adaptive ensemble: {e}")
             return None
     
     def save_models(self):
@@ -1501,7 +1696,7 @@ def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5, interacti
         confidence = engine.calculate_prediction_confidence(predictions)
         
         # Display results
-        display_unified_results(ticker, mode, predictions, multi_day_predictions, current_price, confidence)
+        display_unified_results(ticker, mode, predictions, multi_day_predictions, current_price, confidence, engine)
         
         return True
         
@@ -1509,7 +1704,7 @@ def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5, interacti
         print(f"❌ Error in unified prediction: {e}")
         return False
 
-def display_unified_results(ticker, mode, predictions, multi_day_predictions, current_price, confidence):
+def display_unified_results(ticker, mode, predictions, multi_day_predictions, current_price, confidence, engine=None):
     """Display unified prediction results."""
     mode_title = "SIMPLE" if mode == "simple" else "ADVANCED"
     print(f"\n🎯 {mode_title} PREDICTION RESULTS")
@@ -1526,7 +1721,14 @@ def display_unified_results(ticker, mode, predictions, multi_day_predictions, cu
         change = pred - current_price
         change_pct = (change / current_price) * 100
         direction = "📈" if change > 0 else "📉" if change < 0 else "➡️"
-        print(f"   • {model_name:15}: ₹{pred:.2f} ({direction} {change_pct:+.2f}%)")
+        
+        # Add ensemble weight information if available
+        weight_info = ""
+        if engine and model_name != 'Ensemble' and hasattr(engine, 'ensemble_weights') and engine.ensemble_weights:
+            weight = engine.ensemble_weights.get(model_name, 0)
+            weight_info = f" (weight: {weight:.2f})"
+        
+        print(f"   • {model_name:15}: ₹{pred:.2f} ({direction} {change_pct:+.2f}%){weight_info}")
     
     print()
     
@@ -1584,6 +1786,27 @@ def display_unified_results(ticker, mode, predictions, multi_day_predictions, cu
             recommendation = "⚪ HOLD - Stable price movement expected"
         
         print(f"💡 Trading Recommendation: {recommendation}")
+    
+    # Display ensemble performance analysis if available
+    if engine and hasattr(engine, 'ensemble_performance') and engine.ensemble_performance:
+        print("\n📊 ENSEMBLE PERFORMANCE ANALYSIS:")
+        print("-" * 50)
+        
+        # Sort models by accuracy
+        sorted_models = sorted(
+            engine.ensemble_performance.items(), 
+            key=lambda x: x[1].get('accuracy', 0), 
+            reverse=True
+        )
+        
+        for model_name, perf in sorted_models:
+            accuracy = perf.get('accuracy', 0)
+            mse = perf.get('mse', 0)
+            directional_acc = perf.get('directional_accuracy', 0)
+            weight = engine.ensemble_weights.get(model_name, 0) if hasattr(engine, 'ensemble_weights') else 0
+            
+            print(f"   • {model_name:15}: Accuracy: {accuracy:.3f}, MSE: {mse:.4f}, "
+                  f"Directional: {directional_acc:.3f}, Weight: {weight:.3f}")
     
     print()
     print("=" * 70)

@@ -208,8 +208,8 @@ class CompanyEventImpactModel:
         out["Company_Event_Score"] = out["Company_Event_Score"].fillna(0.0)
         out["Company_Confidence"] = out["Company_Confidence"].fillna(0.0)
         return out
-```# filepath: d:\TradingProjcet\ai-stock-predictor\partC_strategy\company_event_impact.py
-from dataclasses import dataclass
+
+# End of file
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any, Iterable
 import pandas as pd

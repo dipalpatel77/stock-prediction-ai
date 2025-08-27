@@ -1,0 +1,57 @@
+{
+  "metadata": {
+    "ticker": "AAPL",
+    "analysis_type": "analysis",
+    "generated_at": "2025-08-27T11:09:16.593749",
+    "version": "1.0"
+  },
+  "summary": {
+    "current_price": 150.0
+  },
+  "predictions": {
+    "dates": [
+      "2024-01-01",
+      "2024-01-02",
+      "2024-01-03"
+    ],
+    "values": [
+      151.0,
+      152.5,
+      153.2
+    ],
+    "confidence_intervals": {
+      "lower": [
+        150.5,
+        151.8,
+        152.9
+      ],
+      "upper": [
+        151.5,
+        153.2,
+        153.5
+      ]
+    }
+  },
+  "metrics": {
+    "random_forest": {
+      "rmse": 0.05,
+      "r2": 0.85
+    },
+    "linear_regression": {
+      "rmse": 0.08,
+      "r2": 0.75
+    }
+  },
+  "recommendations": {
+    "action": "BUY",
+    "confidence": "HIGH",
+    "reasoning": "Strong upward trend predicted"
+  },
+  "risk_assessment": {
+    "volatility_risk": "MEDIUM",
+    "market_risk": "MEDIUM",
+    "liquidity_risk": "LOW",
+    "model_risk": "MEDIUM",
+    "overall_risk": "MEDIUM"
+  }
+}
