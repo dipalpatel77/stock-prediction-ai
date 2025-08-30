@@ -1,0 +1,42 @@
+{
+  "ticker": "AAPL",
+  "analysis_date": "2025-08-30 00:25:22",
+  "combined_risk_score": 66.33546881836514,
+  "market_impact_score": 14.87671872721162,
+  "confidence_level": 55.55,
+  "key_insights": [
+    "3 high-impact geopolitical events detected",
+    "Significant buyback program: $2.0B",
+    "3 pending corporate actions",
+    "Unusual insider trading activity detected",
+    "Net insider buying: 2,000 shares"
+  ],
+  "recommendations": [
+    "Monitor for potential insider trading signals",
+    "Monitor sector risks: consumer_goods, energy, materials"
+  ],
+  "geopolitical_risk": {
+    "overall_risk_score": 50.3125,
+    "event_count": 5,
+    "risk_factors": [
+      "Political Instability",
+      "Trade Conflicts",
+      "Sanctions",
+      "Regional Conflicts",
+      "Regulatory Changes"
+    ],
+    "market_sentiment_impact": 56.0
+  },
+  "corporate_actions": {
+    "total_actions": 5,
+    "dividend_yield": 2.1,
+    "buyback_amount": 2000000000,
+    "action_score": 11.35
+  },
+  "insider_trading": {
+    "total_transactions": 6,
+    "insider_sentiment_score": 69.35078090817433,
+    "unusual_activity_score": 83,
+    "net_insider_activity": 2000
+  }
+}

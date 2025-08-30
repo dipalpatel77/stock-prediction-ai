@@ -1,0 +1,132 @@
+{
+  "ticker": "TCS",
+  "comparison_date": "2025-08-29 23:19:06",
+  "comparisons": {
+    "variable_coverage": {
+      "phase1_coverage": {
+        "fundamental": 6,
+        "technical": 6,
+        "economic": 0,
+        "global": 6,
+        "institutional": 5,
+        "regulatory": 0
+      },
+      "phase2_coverage": {
+        "fundamental": 6,
+        "technical": 6,
+        "economic": 8,
+        "global": 6,
+        "institutional": 5,
+        "regulatory": 12
+      },
+      "phase1_total": 23,
+      "phase2_total": 43,
+      "phase1_percentage": 69.6969696969697,
+      "phase2_percentage": 130.3030303030303,
+      "improvement": 60.60606060606061,
+      "total_possible": 33
+    },
+    "prediction_scores": {
+      "phase1_score": 11.740807834940503,
+      "phase2_score": 34.05,
+      "difference": 22.309192165059493,
+      "improvement_pct": 190.01411554209758
+    },
+    "feature_richness": {
+      "phase1_features": 4,
+      "phase2_features": 9,
+      "phase1_categories": {
+        "core_analysis": 4,
+        "advanced_features": 0,
+        "api_integration": 0
+      },
+      "phase2_categories": {
+        "core_analysis": 4,
+        "advanced_features": 4,
+        "api_integration": 1
+      },
+      "feature_improvement": 5,
+      "category_improvement": {
+        "advanced_features": 4,
+        "api_integration": 1
+      }
+    },
+    "economic_integration": {
+      "phase1": {
+        "indicators": 0,
+        "currencies": 0,
+        "commodities": 0,
+        "regulatory": 0,
+        "apis_used": 0
+      },
+      "phase2": {
+        "indicators": 8,
+        "currencies": 16,
+        "commodities": 10,
+        "regulatory": 12,
+        "apis_used": 4
+      },
+      "improvements": {
+        "indicators": 8,
+        "currencies": 16,
+        "commodities": 10,
+        "regulatory": 12,
+        "apis_used": 4
+      }
+    },
+    "performance_metrics": {
+      "phase1": {
+        "execution_time": 120,
+        "memory_usage": 512,
+        "api_calls": 5,
+        "data_sources": 2,
+        "cache_hits": 0.7,
+        "error_rate": 0.05
+      },
+      "phase2": {
+        "execution_time": 180,
+        "memory_usage": 768,
+        "api_calls": 15,
+        "data_sources": 6,
+        "cache_hits": 0.8,
+        "error_rate": 0.03
+      },
+      "changes": {
+        "execution_time": 60,
+        "memory_usage": 256,
+        "api_calls": 10,
+        "data_sources": 4,
+        "cache_hits": 0.10000000000000009,
+        "error_rate": -0.020000000000000004
+      }
+    }
+  },
+  "overall_improvement": {
+    "category_scores": {
+      "variable_coverage": 100,
+      "prediction_scores": 100,
+      "feature_richness": 100,
+      "economic_integration": 100,
+      "performance_metrics": 70.0
+    },
+    "total_score": 97.0,
+    "grade": "A+",
+    "weights": {
+      "variable_coverage": 0.3,
+      "prediction_scores": 0.25,
+      "feature_richness": 0.2,
+      "economic_integration": 0.15,
+      "performance_metrics": 0.1
+    }
+  },
+  "recommendations": [
+    "\ud83c\udfaf Excellent variable coverage improvement - Phase 2 provides comprehensive market analysis",
+    "\ud83d\ude80 Outstanding prediction score improvement - Enhanced models are performing excellently",
+    "\ud83d\udd17 API integration successful - Real-time data sources are enhancing analysis",
+    "\u2705 Error rate improved - Better error handling and data validation",
+    "\u26a1 Cache efficiency improved - Better data caching reduces API calls",
+    "\ud83d\udd04 Consider implementing Phase 3 for advanced AI/ML features",
+    "\ud83d\udcca Monitor prediction accuracy over time to validate improvements",
+    "\ud83d\udd27 Optimize API call frequency to balance data freshness and performance"
+  ]
+}

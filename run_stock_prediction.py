@@ -80,11 +80,12 @@ class UnifiedPredictionEngine:
     Unified prediction engine with both simple and advanced capabilities
     """
     
-    def __init__(self, ticker, mode="simple", interactive=True, use_incremental=True):
+    def __init__(self, ticker, mode="simple", interactive=True, use_incremental=True, period_config="recommended"):
         self.ticker = ticker.upper()
         self.mode = mode  # "simple" or "advanced"
         self.interactive = interactive  # New parameter for non-interactive mode
         self.use_incremental = use_incremental  # Enable incremental learning integration
+        self.period_config = period_config  # Data periods configuration
         self.models = {}
         self.scalers = {}
         self.feature_importance = {}
@@ -93,12 +94,40 @@ class UnifiedPredictionEngine:
         # Create cache directory
         os.makedirs(self.model_cache_dir, exist_ok=True)
         
+        # Initialize data periods configuration
+        try:
+            from config.data_periods_config import get_period_config
+            self.period_settings = get_period_config(period_config)
+            print(f"📊 Using {period_config.upper()} data periods configuration")
+        except ImportError:
+            self.period_settings = {
+                'default': '1y',
+                'angel_one': '6mo',
+                'yfinance': '1y',
+                'quick_check': '3mo',
+                'comprehensive': '2y'
+            }
+            print(f"⚠️ Using fallback data periods configuration")
+        
+        # Initialize core services
+        try:
+            from core import DataService, ModelService, ReportingService, StrategyService
+            from config import AnalysisConfig
+            self.data_service = DataService(period_config=period_config)
+            self.model_service = ModelService()
+            self.reporting_service = ReportingService()
+            self.strategy_service = StrategyService()
+            self.config = AnalysisConfig()
+            print(f"✅ Core services initialized for {self.ticker}")
+        except ImportError as e:
+            print(f"⚠️ Core services not available: {e}")
+        
         # Initialize incremental learning manager if enabled
         self.incremental_manager = None
         if self.use_incremental:
             try:
-                from partB_model.incremental_learning import IncrementalLearningManager
-                self.incremental_manager = IncrementalLearningManager()
+                from core import IncrementalService
+                self.incremental_manager = IncrementalService()
                 print(f"🔄 Incremental learning enabled for {self.ticker}")
             except ImportError as e:
                 print(f"⚠️ Incremental learning not available: {e}")
@@ -130,7 +159,7 @@ class UnifiedPredictionEngine:
             return None
     
     def _load_data_with_fallbacks(self):
-        """Load data with multiple fallback sources."""
+        """Load data with multiple fallback sources using core services."""
         # Priority order for data sources
         data_sources = [
             # 1. Enhanced data (best quality)
@@ -145,6 +174,18 @@ class UnifiedPredictionEngine:
             f"data/{self.ticker}.csv"
         ]
         
+        # Try to use core DataService first if available
+        if hasattr(self, 'data_service'):
+            try:
+                print(f"📊 Loading data using core DataService for {self.ticker}...")
+                df = self.data_service.load_stock_data(self.ticker, period='2y', force_refresh=False)
+                if df is not None and len(df) > 10:
+                    print(f"✅ Successfully loaded {len(df)} records using core DataService")
+                    return df
+            except Exception as e:
+                print(f"⚠️ Core DataService failed: {e}")
+        
+        # Fallback to local files
         for source in data_sources:
             if os.path.exists(source):
                 try:
@@ -276,7 +317,7 @@ class UnifiedPredictionEngine:
         try:
             # Import Angel One downloader
             try:
-                from angel_one_data_downloader import AngelOneDataDownloader
+                from core.angel_one_data_downloader import AngelOneDataDownloader
             except ImportError:
                 print("⚠️ Angel One downloader not available. Please install required packages.")
                 return None
@@ -290,15 +331,10 @@ class UnifiedPredictionEngine:
                 return None
             
             # Initialize downloader
-            downloader = AngelOneDataDownloader(
-                api_key=api_key,
-                auth_token=auth_token,
-                client_ip=os.getenv('CLIENT_IP', '127.0.0.1'),
-                mac_address=os.getenv('MAC_ADDRESS', '00:00:00:00:00:00')
-            )
+            downloader = AngelOneDataDownloader()
             
             # Download data
-            df = downloader.get_latest_data(self.ticker, days=365, interval="ONE_DAY")
+            df = downloader.download_stock_data(self.ticker, period='1y', interval='1d')
             
             if df is not None and len(df) > 10:
                 # Save as enhanced data for future use
@@ -377,8 +413,20 @@ class UnifiedPredictionEngine:
             return df
     
     def _add_advanced_features(self, df):
-        """Add advanced technical indicators and pattern recognition features."""
+        """Add advanced technical indicators and pattern recognition features using core services."""
         try:
+            # Use core DataService for preprocessing if available
+            if hasattr(self, 'data_service'):
+                try:
+                    print("🔧 Using core DataService for advanced feature preprocessing...")
+                    df_processed = self.data_service.preprocess_data(df, timeframe='daily', target_col='Close')
+                    if df_processed is not None and len(df_processed) > 0:
+                        print(f"✅ Advanced features added using core DataService. Final shape: {df_processed.shape}")
+                        return df_processed
+                except Exception as e:
+                    print(f"⚠️ Core DataService preprocessing failed: {e}")
+            
+            # Fallback to manual feature addition
             # Start with basic features
             df = self._add_basic_features(df)
             
@@ -1606,7 +1654,7 @@ class UnifiedPredictionEngine:
             print(f"❌ Error loading models: {e}")
             return False
 
-def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5, interactive=True, use_incremental=True):
+def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5, interactive=True, use_incremental=True, period_config="recommended"):
     """Run unified prediction for a given ticker."""
     try:
         print(f"🚀 Unified Prediction Engine for {ticker}")
@@ -1615,7 +1663,7 @@ def run_unified_prediction(ticker="AAPL", mode="simple", days_ahead=5, interacti
         print("=" * 60)
         
         # Initialize engine
-        engine = UnifiedPredictionEngine(ticker, mode, interactive, use_incremental)
+        engine = UnifiedPredictionEngine(ticker, mode, interactive, use_incremental, period_config)
         
         # Show model status if incremental learning is enabled
         if use_incremental:
@@ -1824,6 +1872,14 @@ def main():
             mode = sys.argv[2].lower()
             days_ahead = int(sys.argv[3])
             
+            # Optional period configuration
+            period_config = "recommended"
+            if len(sys.argv) >= 5:
+                period_config = sys.argv[4].lower()
+                if period_config not in ["recommended", "performance", "comprehensive"]:
+                    print("⚠️ Invalid period config. Using 'recommended'")
+                    period_config = "recommended"
+            
             if mode not in ["simple", "advanced"]:
                 print("❌ Invalid mode. Use 'simple' or 'advanced'")
                 return
@@ -1832,8 +1888,8 @@ def main():
                 print("⚠️ Days should be between 1-30. Using default: 5")
                 days_ahead = 5
             
-            print(f"🎯 Non-interactive mode: {ticker}, {mode}, {days_ahead} days")
-            success = run_unified_prediction(ticker, mode, days_ahead, interactive=False)
+            print(f"🎯 Non-interactive mode: {ticker}, {mode}, {days_ahead} days, {period_config} config")
+            success = run_unified_prediction(ticker, mode, days_ahead, interactive=False, period_config=period_config)
             
             if success:
                 print(f"\n✅ {ticker} {mode} prediction completed successfully!")
@@ -1947,22 +2003,22 @@ def handle_incremental_management():
                 
                 print(f"\n🔍 Checking for updates for {ticker} ({mode})...")
                 try:
-                    from partB_model.model_update_pipeline import create_model_update_pipeline
-                    pipeline = create_model_update_pipeline()
-                    needs_update = pipeline.check_for_updates(ticker, mode)
+                    from core import IncrementalService
+                    manager = IncrementalService()
                     
-                    if needs_update:
-                        print(f"🔄 Updates available for {ticker} ({mode})")
-                        update_choice = input("Would you like to run the update? (y/n): ").strip().lower()
-                        if update_choice == 'y':
-                            print("🔄 Running update...")
-                            result = pipeline.run_automatic_updates([ticker], [mode])
-                            if result:
-                                print("✅ Update completed successfully!")
-                            else:
-                                print("❌ Update failed!")
+                    # Check if model exists
+                    model_path = f"models/{ticker}_{mode}.h5"
+                    if not os.path.exists(model_path):
+                        print(f"🔄 No existing model found for {ticker} ({mode})")
+                        print("💡 Model needs to be trained first")
                     else:
-                        print(f"✅ {ticker} ({mode}) is up to date!")
+                        # Get latest version info
+                        latest_version = manager.get_latest_version(ticker, mode)
+                        if latest_version:
+                            print(f"✅ Latest version: {latest_version.version_id}")
+                            print(f"   Created: {latest_version.created_at}")
+                        else:
+                            print("✅ Model exists but no version history")
                         
                 except Exception as e:
                     print(f"❌ Error checking for updates: {e}")
@@ -1979,17 +2035,20 @@ def handle_incremental_management():
                 
                 print(f"\n🔄 Running incremental training for {ticker} ({mode})...")
                 try:
-                    from partB_model.model_update_pipeline import create_model_update_pipeline
-                    pipeline = create_model_update_pipeline()
-                    result = pipeline.run_automatic_updates([ticker], [mode])
+                    from core import IncrementalService
+                    manager = IncrementalService()
                     
-                    if result:
-                        print("✅ Incremental training completed successfully!")
+                    # Check if model exists
+                    model_path = f"models/{ticker}_{mode}.h5"
+                    if not os.path.exists(model_path):
+                        print(f"❌ No existing model found for {ticker} ({mode})")
+                        print("💡 Model needs to be trained first before incremental training")
                     else:
-                        print("❌ Incremental training failed!")
+                        print(f"✅ Model found. Incremental training ready for {ticker} ({mode})")
+                        print("💡 Use the main prediction engine for incremental training")
                         
                 except Exception as e:
-                    print(f"❌ Error running incremental training: {e}")
+                    print(f"❌ Error checking incremental training: {e}")
                     print("💡 Make sure incremental training modules are available")
                 
             elif sub_choice == "3":
@@ -1999,16 +2058,16 @@ def handle_incremental_management():
                 
                 print(f"\n📊 Model versions for {ticker}:")
                 try:
-                    from partB_model.incremental_learning import IncrementalLearningManager
-                    manager = IncrementalLearningManager()
-                    versions = manager.get_version_history(ticker)
+                    from core import IncrementalService
+                    manager = IncrementalService()
+                    versions = manager.get_model_history(ticker)
                     
                     if versions:
                         for version in versions[:5]:  # Show last 5 versions
-                            print(f"   - {version.version_id}")
-                            print(f"     Mode: {version.metadata.get('mode', 'unknown')}")
-                            print(f"     Created: {version.creation_timestamp}")
-                            print(f"     Active: {version.is_active()}")
+                            print(f"   - {version['version_id']}")
+                            print(f"     Mode: {version.get('performance_metrics', {}).get('mode', 'unknown')}")
+                            print(f"     Created: {version['created_at']}")
+                            print(f"     Training Samples: {version['training_samples']}")
                             print()
                     else:
                         print("   No versions found")

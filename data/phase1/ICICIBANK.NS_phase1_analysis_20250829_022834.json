@@ -1,0 +1,81 @@
+{
+  "ticker": "ICICIBANK.NS",
+  "timestamp": "2025-08-29 02:28:34",
+  "fundamental": {
+    "eps": 72.409999999282,
+    "eps_growth": 14.594911628837176,
+    "net_profit_margin": 24.824565214250352,
+    "revenue_growth": 27.510105514716233,
+    "dividend_yield": 78.0,
+    "dividend_announcement": "Recent: 11.00",
+    "debt_to_equity": 2188834400000.0,
+    "current_ratio": 0.0,
+    "roe": 51029200000000.0,
+    "roa": 1.931284545267951,
+    "pe_ratio": 19.030197,
+    "pb_ratio": 3.0292335,
+    "financial_health_score": 70.0
+  },
+  "global_markets": {
+    "dow_jones_change": 0.1572909870091696,
+    "nasdaq_change": 0.5327339239115635,
+    "ftse_change": -0.41791367295122134,
+    "nikkei_change": 0.7255833511875727,
+    "sp500_change": 0.31567253988335914,
+    "global_volatility": 10.745972374714432,
+    "market_correlation": NaN,
+    "risk_sentiment": "Low Risk - Bullish",
+    "market_impact_score": 0.0
+  },
+  "institutional": {
+    "fii_net_flow": 891.2797038776064,
+    "dii_net_flow": -602.5110808674824,
+    "fii_flow_trend": "Inflow",
+    "dii_flow_trend": "Outflow",
+    "institutional_sentiment": "Neutral",
+    "analyst_rating_change": "Hold by Morgan Stanley",
+    "analyst_consensus": "Hold",
+    "institutional_confidence": 60.0
+  },
+  "technical": {
+    "rsi": 32.69457416827619,
+    "sma_20": 1435.0999084472655,
+    "sma_50": 1432.2182104492188,
+    "macd": -5.20028662447362,
+    "macd_signal": -2.0266800683353776,
+    "macd_histogram": -3.173606556138242,
+    "bb_upper": 1470.3299348599012,
+    "bb_middle": 1435.0999084472655,
+    "bb_lower": 1399.8698820346299,
+    "bb_position": -0.010926850290640796,
+    "volume_sma": 7871428.95,
+    "volume_ratio": 1.6502674523918557,
+    "price_momentum": -4.891021668538187,
+    "volatility": 0.5847675739558084,
+    "vix_current": 11.276055348628827
+  },
+  "sentiment": [
+    {
+      "ticker": "ICICIBANK.NS",
+      "analysis_date": "2025-08-29 02:28:34",
+      "total_headlines": 5,
+      "avg_vader_compound": 0.13810000000000003,
+      "avg_textblob_polarity": 0.14121212121212118,
+      "avg_textblob_subjectivity": 0.3284848484848485,
+      "sentiment_score": 0.13965606060606062,
+      "sentiment_label": "positive"
+    }
+  ],
+  "enhanced_prediction_score": 14.005464252344026,
+  "variable_coverage": {
+    "overall_coverage": "13/25 (52.0%)",
+    "category_breakdown": {
+      "company_specific": "5/9 (55.6%)",
+      "economic": "0/7 (0.0%)",
+      "market_sentiment": "4/6 (66.7%)",
+      "global": "4/6 (66.7%)",
+      "regulatory": "0/5 (0.0%)"
+    },
+    "phase1_improvement": "+3 variables"
+  }
+}

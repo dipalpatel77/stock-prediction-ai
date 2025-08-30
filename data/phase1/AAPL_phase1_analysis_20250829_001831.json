@@ -1,0 +1,15 @@
+{
+  "ticker": "AAPL",
+  "timestamp": "2025-08-29 00:18:31",
+  "fundamental": {},
+  "global_markets": {},
+  "institutional": {},
+  "technical": {},
+  "sentiment": {},
+  "enhanced_prediction_score": 50.0,
+  "variable_coverage": {
+    "overall_coverage": "Error",
+    "category_breakdown": {},
+    "phase1_improvement": "Error"
+  }
+}

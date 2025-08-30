@@ -10,6 +10,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 import warnings
+from core.date_utils import DateUtils
 warnings.filterwarnings('ignore')
 
 class EnhancedPriceForecaster:
@@ -156,9 +157,21 @@ class EnhancedPriceForecaster:
             predicted_price = max(predicted_price, current_price * 0.95)  # Max 5% daily drop
             predicted_price = min(predicted_price, current_price * 1.05)  # Max 5% daily gain
             
+            # Get enhanced date information
+            date_info = DateUtils.format_prediction_date(datetime.now(), day)
+            
             predictions.append({
-                'Date': (datetime.now() + timedelta(days=day)).strftime('%Y-%m-%d'),
+                'Date': date_info['prediction_date'],
+                'Date_Full': date_info['prediction_date_full'],
+                'Date_Short': date_info['prediction_date_short'],
+                'Month_Name': date_info['month_name'],
+                'Month_Name_Short': date_info['month_name_short'],
+                'Day_Name': date_info['day_name'],
+                'Day_Name_Short': date_info['day_name_short'],
                 'Day': day,
+                'Day_of_Week': date_info['day_of_week'],
+                'Month': date_info['month'],
+                'Year': date_info['year'],
                 'Predicted_Price': round(predicted_price, 2),
                 'Trend_Factor': round(trend_factor * 100, 2),
                 'Volatility_Factor': round(volatility_factor * 100, 2),
@@ -209,9 +222,23 @@ class EnhancedPriceForecaster:
             predicted_price = max(predicted_price, current_price * 0.85)  # Max 15% weekly drop
             predicted_price = min(predicted_price, current_price * 1.15)  # Max 15% weekly gain
             
+            # Get enhanced date information for weekly predictions
+            date_info = DateUtils.format_week_prediction_date(datetime.now(), week)
+            
             predictions.append({
-                'Date': (datetime.now() + timedelta(weeks=week)).strftime('%Y-%m-%d'),
+                'Date': date_info['prediction_date'],
+                'Date_Full': date_info['prediction_date_full'],
+                'Date_Short': date_info['prediction_date_short'],
+                'Month_Name': date_info['month_name'],
+                'Month_Name_Short': date_info['month_name_short'],
+                'Day_Name': date_info['day_name'],
+                'Day_Name_Short': date_info['day_name_short'],
                 'Week': week,
+                'Week_Range': date_info['prediction_week_range'],
+                'Week_Short': date_info['prediction_week_short'],
+                'Day_of_Week': date_info['day_of_week'],
+                'Month': date_info['month'],
+                'Year': date_info['year'],
                 'Predicted_Price': round(predicted_price, 2),
                 'Trend_Factor': round(trend_factor * 100, 2),
                 'Momentum_Factor': round(momentum_factor * 100, 2),
@@ -265,9 +292,24 @@ class EnhancedPriceForecaster:
             predicted_price = max(predicted_price, current_price * 0.7)   # Max 30% monthly drop
             predicted_price = min(predicted_price, current_price * 1.3)   # Max 30% monthly gain
             
+            # Get enhanced date information for monthly predictions
+            date_info = DateUtils.format_month_prediction_date(datetime.now(), month)
+            
             predictions.append({
-                'Date': (datetime.now() + timedelta(days=month*30)).strftime('%Y-%m-%d'),
+                'Date': date_info['prediction_date'],
+                'Date_Full': date_info['prediction_date_full'],
+                'Date_Short': date_info['prediction_date_short'],
+                'Month_Name': date_info['month_name'],
+                'Month_Name_Short': date_info['month_name_short'],
+                'Month_Full': date_info['prediction_month_full'],
+                'Month_Short': date_info['prediction_month_short'],
+                'Day_Name': date_info['day_name'],
+                'Day_Name_Short': date_info['day_name_short'],
                 'Month': month,
+                'Quarter': date_info['prediction_quarter'],
+                'Day_of_Week': date_info['day_of_week'],
+                'Month_Number': date_info['month'],
+                'Year': date_info['year'],
                 'Predicted_Price': round(predicted_price, 2),
                 'Growth_Factor': round(growth_factor * 100, 2),
                 'Trend_Factor': round(trend_factor * 100, 2),

@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 class DataService:
     """Shared data loading and preprocessing service."""
     
-    def __init__(self, cache_dir: str = "data/cache"):
+    def __init__(self, cache_dir: str = "data/cache", period_config: str = "recommended"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.data_cache = {}
@@ -33,8 +33,23 @@ class DataService:
         self.min_data_points = 100
         self.max_missing_ratio = 0.1
         
-    def load_stock_data(self, ticker: str, period: str = '2y', 
-                       interval: str = '1d', force_refresh: bool = False) -> pd.DataFrame:
+        # Load period configuration
+        try:
+            from config.data_periods_config import get_period_config
+            self.period_config = get_period_config(period_config)
+        except ImportError:
+            # Fallback to default periods
+            self.period_config = {
+                'default': '1y',
+                'angel_one': '6mo',
+                'yfinance': '1y',
+                'quick_check': '3mo',
+                'comprehensive': '2y'
+            }
+        
+    def load_stock_data(self, ticker: str, period: str = None, 
+                        interval: str = '1d', force_refresh: bool = False,
+                        start_date: str = None, end_date: str = None) -> pd.DataFrame:
         """
         Load stock data with intelligent caching and fallback mechanisms.
         
@@ -43,11 +58,25 @@ class DataService:
             period: Data period ('1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max')
             interval: Data interval ('1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo')
             force_refresh: Force refresh data from source
+            start_date: Custom start date (YYYY-MM-DD format)
+            end_date: Custom end date (YYYY-MM-DD format)
             
         Returns:
             DataFrame with stock data
         """
         ticker = ticker.upper()
+        
+        # Use configured period if none provided
+        if period is None:
+            if self._is_indian_stock(ticker):
+                period = self.period_config.get('angel_one', '6mo')
+            else:
+                period = self.period_config.get('yfinance', '1y')
+        
+        # Handle custom date range
+        if start_date and end_date:
+            return self.load_stock_data_custom_dates(ticker, start_date, end_date, interval, force_refresh)
+        
         cache_key = f"{ticker}_{period}_{interval}"
         cache_file = self.cache_dir / f"{cache_key}.pkl"
         
@@ -90,20 +119,156 @@ class DataService:
         else:
             raise ValueError(f"Failed to load valid data for {ticker}")
     
-    def _download_stock_data(self, ticker: str, period: str, interval: str) -> Optional[pd.DataFrame]:
-        """Download stock data from yfinance with error handling."""
-        try:
-            # Try yfinance first
-            stock = yf.Ticker(ticker)
-            data = stock.history(period=period, interval=interval)
+    def load_stock_data_custom_dates(self, ticker: str, start_date: str, end_date: str, 
+                                   interval: str = '1d', force_refresh: bool = False) -> pd.DataFrame:
+        """
+        Load stock data for custom date range.
+        
+        Args:
+            ticker: Stock ticker symbol
+            start_date: Start date (YYYY-MM-DD format)
+            end_date: End date (YYYY-MM-DD format)
+            interval: Data interval
+            force_refresh: Force refresh data from source
             
-            if data.empty:
-                print(f"⚠️ No data returned for {ticker}")
+        Returns:
+            DataFrame with stock data
+        """
+        ticker = ticker.upper()
+        cache_key = f"{ticker}_custom_{start_date}_{end_date}_{interval}"
+        cache_file = self.cache_dir / f"{cache_key}.pkl"
+        
+        # Check cache first (unless force refresh)
+        if not force_refresh and cache_file.exists():
+            try:
+                with self.cache_lock:
+                    if cache_key in self.data_cache:
+                        return self.data_cache[cache_key].copy()
+                    
+                    with open(cache_file, 'rb') as f:
+                        data = pickle.load(f)
+                    
+                    # Validate cached data
+                    if self._validate_data(data):
+                        self.data_cache[cache_key] = data
+                        print(f"📊 Loaded cached custom data for {ticker} ({len(data)} records)")
+                        return data.copy()
+                    else:
+                        print(f"⚠️ Cached custom data for {ticker} is invalid, refreshing...")
+            except Exception as e:
+                print(f"⚠️ Cache loading error for {ticker}: {e}")
+        
+        # Load from source
+        print(f"📥 Downloading custom date range data for {ticker} ({start_date} to {end_date})...")
+        data = self._download_stock_data_custom_dates(ticker, start_date, end_date, interval)
+        
+        if data is not None and self._validate_data(data):
+            # Cache the data
+            try:
+                with self.cache_lock:
+                    self.data_cache[cache_key] = data
+                    with open(cache_file, 'wb') as f:
+                        pickle.dump(data, f)
+                print(f"✅ Custom data cached for {ticker}")
+            except Exception as e:
+                print(f"⚠️ Caching error for {ticker}: {e}")
+            
+            return data.copy()
+        else:
+            raise ValueError(f"Failed to load valid data for {ticker}")
+    
+    def _download_stock_data_custom_dates(self, ticker: str, start_date: str, end_date: str, interval: str) -> Optional[pd.DataFrame]:
+        """Download stock data for custom date range with intelligent source selection."""
+        try:
+            # For Indian stocks: Try Angel One first, then yfinance as fallback
+            if self._is_indian_stock(ticker):
+                print(f"🇮🇳 Indian stock detected: {ticker}")
+                print(f"🔄 Trying Angel One first for {ticker}...")
+                
+                # Try Angel One first
+                angel_data = self._download_from_angel_one_custom_dates(ticker, start_date, end_date, interval)
+                if angel_data is not None and not angel_data.empty:
+                    print(f"✅ Successfully downloaded {len(angel_data)} records for {ticker} from Angel One")
+                    return angel_data
+                
+                # Fallback to yfinance
+                print(f"⚠️ Angel One failed for {ticker}, trying yfinance as fallback...")
+                yahoo_data = self._download_from_yahoo_custom_dates(ticker, start_date, end_date, interval)
+                if yahoo_data is not None and not yahoo_data.empty:
+                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from yfinance (fallback)")
+                    return yahoo_data
+                
+                print(f"❌ Both Angel One and yfinance failed for {ticker}")
                 return None
             
-            # Basic preprocessing
-            data = self._preprocess_raw_data(data)
-            return data
+            # For non-Indian stocks: Use yfinance
+            else:
+                print(f"🌍 Non-Indian stock detected: {ticker}")
+                print(f"🔄 Using yfinance for {ticker}...")
+                
+                yahoo_data = self._download_from_yahoo_custom_dates(ticker, start_date, end_date, interval)
+                if yahoo_data is not None and not yahoo_data.empty:
+                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from yfinance")
+                    return yahoo_data
+                
+                print(f"❌ yfinance failed for {ticker}")
+                return None
+            
+        except Exception as e:
+            print(f"❌ Error downloading data for {ticker}: {e}")
+            return None
+    
+    def _download_stock_data(self, ticker: str, period: str, interval: str) -> Optional[pd.DataFrame]:
+        """Download stock data with intelligent source selection."""
+        try:
+            # For Indian stocks: Try Angel One first, then yfinance as fallback
+            if self._is_indian_stock(ticker):
+                print(f"🇮🇳 Indian stock detected: {ticker}")
+                print(f"🔄 Trying Angel One first for {ticker}...")
+                
+                # Try Angel One first
+                angel_data = self._download_from_angel_one(ticker, period, interval)
+                if angel_data is not None and not angel_data.empty:
+                    print(f"✅ Successfully downloaded {len(angel_data)} records for {ticker} from Angel One")
+                    return angel_data
+                
+                # Fallback to yfinance
+                print(f"⚠️ Angel One failed for {ticker}, trying yfinance as fallback...")
+                yahoo_data = self._download_from_yahoo(ticker, period, interval)
+                if yahoo_data is not None and not yahoo_data.empty:
+                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from yfinance (fallback)")
+                    return yahoo_data
+                
+                # Both sources failed - provide detailed error information
+                print(f"❌ Both Angel One and yfinance failed for {ticker}")
+                print(f"   💡 This could be due to:")
+                print(f"   - Angel One authentication issues (check API credentials)")
+                print(f"   - Stock not available on international exchanges (yfinance)")
+                print(f"   - Stock may be delisted or suspended")
+                print(f"   - Network connectivity issues")
+                
+                # Try with .NS suffix for yfinance as additional fallback
+                print(f"🔄 Trying with .NS suffix for {ticker}...")
+                yahoo_data_ns = self._download_from_yahoo(f"{ticker}.NS", period, interval)
+                if yahoo_data_ns is not None and not yahoo_data_ns.empty:
+                    print(f"✅ Successfully downloaded {len(yahoo_data_ns)} records for {ticker}.NS from yfinance")
+                    return yahoo_data_ns
+                
+                print(f"❌ All data sources failed for {ticker}")
+                return None
+            
+            # For non-Indian stocks: Use yfinance first
+            else:
+                print(f"🌍 Non-Indian stock detected: {ticker}")
+                print(f"🔄 Using yfinance for {ticker}...")
+                
+                yahoo_data = self._download_from_yahoo(ticker, period, interval)
+                if yahoo_data is not None and not yahoo_data.empty:
+                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from yfinance")
+                    return yahoo_data
+                
+                print(f"❌ yfinance failed for {ticker}")
+                return None
             
         except Exception as e:
             print(f"❌ Error downloading data for {ticker}: {e}")
@@ -118,7 +283,7 @@ class DataService:
         if 'Date' not in df.columns and df.index.name == 'Date':
             df = df.reset_index()
         
-        df['Date'] = pd.to_datetime(df['Date'])
+        df['Date'] = pd.to_datetime(df['Date'], utc=True).dt.tz_localize(None)
         
         # Handle missing values
         df = self._handle_missing_values(df)
@@ -170,23 +335,30 @@ class DataService:
         if df is None or df.empty:
             return False
         
-        if len(df) < self.min_data_points:
+        # Adjust minimum data points based on data length
+        # For short periods (1mo, 3mo), allow fewer data points
+        min_required = min(self.min_data_points, max(10, len(df) // 2))
+        
+        if len(df) < min_required:
+            print(f"⚠️ Insufficient data points: {len(df)} < {min_required}")
             return False
         
         # Check for required columns
         required_cols = ['Date', 'Close']
         if not all(col in df.columns for col in required_cols):
+            print(f"⚠️ Missing required columns: {required_cols}")
             return False
         
         # Check for reasonable price values
         if 'Close' in df.columns:
             if df['Close'].min() <= 0 or df['Close'].max() > 100000:
+                print(f"⚠️ Unreasonable price values: min={df['Close'].min()}, max={df['Close'].max()}")
                 return False
         
         return True
     
     def get_current_price(self, ticker: str, force_refresh: bool = False) -> float:
-        """Get current stock price with caching."""
+        """Get current stock price with intelligent source selection."""
         ticker = ticker.upper()
         
         # Check cache first
@@ -197,21 +369,36 @@ class DataService:
                 return price
         
         try:
-            # Get current price
-            stock = yf.Ticker(ticker)
-            current_price = stock.info.get('regularMarketPrice')
+            # For Indian stocks: Try Angel One first, then yfinance as fallback
+            if self._is_indian_stock(ticker):
+                print(f"🇮🇳 Getting current price for Indian stock: {ticker}")
+                
+                # Try Angel One first
+                angel_price = self._get_current_price_from_angel_one(ticker)
+                if angel_price is not None:
+                    self.current_prices[ticker] = (time.time(), angel_price)
+                    return angel_price
+                
+                # Fallback to yfinance
+                print(f"⚠️ Angel One failed for {ticker}, trying yfinance...")
+                yahoo_price = self._get_current_price_from_yahoo(ticker)
+                if yahoo_price is not None:
+                    self.current_prices[ticker] = (time.time(), yahoo_price)
+                    return yahoo_price
+                
+                print(f"❌ Both Angel One and yfinance failed for {ticker}")
+                return None
             
-            if current_price is None:
-                # Fallback: get latest close price
-                data = self.load_stock_data(ticker, period='5d')
-                if data is not None and not data.empty:
-                    current_price = data['Close'].iloc[-1]
-            
-            if current_price is not None:
-                self.current_prices[ticker] = (time.time(), current_price)
-                return current_price
+            # For non-Indian stocks: Use yfinance
             else:
-                raise ValueError(f"Could not get current price for {ticker}")
+                print(f"🌍 Getting current price for non-Indian stock: {ticker}")
+                yahoo_price = self._get_current_price_from_yahoo(ticker)
+                if yahoo_price is not None:
+                    self.current_prices[ticker] = (time.time(), yahoo_price)
+                    return yahoo_price
+                
+                print(f"❌ yfinance failed for {ticker}")
+                return None
                 
         except Exception as e:
             print(f"❌ Error getting current price for {ticker}: {e}")
@@ -236,26 +423,33 @@ class DataService:
         # Copy to avoid modifying original
         df = df.copy()
         
+        # Ensure Date column is properly formatted as datetime
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'], utc=True).dt.tz_localize(None)
+        
         # Resample data based on timeframe
         if timeframe == 'intraday':
             # Keep original frequency
             pass
         elif timeframe == 'daily':
             # Ensure daily frequency
-            df = df.set_index('Date').resample('D').agg({
-                'Open': 'first', 'High': 'max', 'Low': 'min', 
-                'Close': 'last', 'Volume': 'sum'
-            }).dropna().reset_index()
+            if 'Date' in df.columns:
+                df = df.set_index('Date').resample('D').agg({
+                    'Open': 'first', 'High': 'max', 'Low': 'min', 
+                    'Close': 'last', 'Volume': 'sum'
+                }).dropna().reset_index()
         elif timeframe == 'weekly':
-            df = df.set_index('Date').resample('W').agg({
-                'Open': 'first', 'High': 'max', 'Low': 'min', 
-                'Close': 'last', 'Volume': 'sum'
-            }).dropna().reset_index()
+            if 'Date' in df.columns:
+                df = df.set_index('Date').resample('W').agg({
+                    'Open': 'first', 'High': 'max', 'Low': 'min', 
+                    'Close': 'last', 'Volume': 'sum'
+                }).dropna().reset_index()
         elif timeframe == 'monthly':
-            df = df.set_index('Date').resample('M').agg({
-                'Open': 'first', 'High': 'max', 'Low': 'min', 
-                'Close': 'last', 'Volume': 'sum'
-            }).dropna().reset_index()
+            if 'Date' in df.columns:
+                df = df.set_index('Date').resample('M').agg({
+                    'Open': 'first', 'High': 'max', 'Low': 'min', 
+                    'Close': 'last', 'Volume': 'sum'
+                }).dropna().reset_index()
         
         # Add technical indicators
         df = self._add_technical_indicators(df)
@@ -390,3 +584,316 @@ class DataService:
             tickers.add(ticker)
         
         return sorted(list(tickers))
+    
+    def _is_indian_stock(self, ticker: str) -> bool:
+        """Check if ticker is an Indian stock using the Indian Stock Mapper."""
+        try:
+            # First check if it has Indian suffixes (fast check)
+            indian_suffixes = ['.NS', '.BO', '.NSE', '.BSE']
+            ticker_upper = ticker.upper()
+            
+            for suffix in indian_suffixes:
+                if ticker_upper.endswith(suffix):
+                    print(f"✅ '{ticker}' identified as Indian stock (suffix: {suffix})")
+                    return True
+            
+            # Remove suffix for lookup in Angel One database
+            base_ticker = ticker_upper
+            for suffix in indian_suffixes:
+                if base_ticker.endswith(suffix):
+                    base_ticker = base_ticker[:-len(suffix)]
+                    break
+            
+            # Try to use the Indian Stock Mapper
+            from data_downloaders.indian_stock_mapper import get_symbol_info, load_angel_master
+            
+            # Load Angel master data (uses smart caching)
+            angel_master = load_angel_master()
+            
+            # Look up the symbol (try both with and without suffix)
+            symbol_info = get_symbol_info(base_ticker, angel_master)
+            if not symbol_info:
+                symbol_info = get_symbol_info(ticker, angel_master)
+            
+            if symbol_info:
+                print(f"✅ Found '{ticker}' in Angel One database: {symbol_info['exchange']}")
+                return True
+            else:
+                print(f"❌ '{ticker}' not found in Angel One database")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️ Error checking Indian stock mapper for '{ticker}': {e}")
+            print("🔄 Falling back to hardcoded list...")
+            
+            # Fallback to hardcoded list
+            return self._is_indian_stock_fallback(ticker)
+    
+    def _is_indian_stock_fallback(self, ticker: str) -> bool:
+        """Fallback method using hardcoded Indian stock patterns."""
+        # Common Indian stock patterns (fallback)
+        indian_patterns = [
+            # NSE symbols (no suffix)
+            'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR',
+            'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'AXISBANK', 'ASIANPAINT',
+            'MARUTI', 'SUNPHARMA', 'TATAMOTORS', 'WIPRO', 'ULTRACEMCO', 'TITAN',
+            'BAJFINANCE', 'NESTLEIND', 'HCLTECH', 'POWERGRID', 'NTPC', 'TECHM',
+            'ADANIENT', 'ADANIPORTS', 'BAJAJFINSV', 'BRITANNIA', 'CIPLA', 'COALINDIA',
+            'DIVISLAB', 'DRREDDY', 'EICHERMOT', 'GRASIM', 'HDFC', 'HDFCLIFE',
+            'HEROMOTOCO', 'HINDALCO', 'JSWSTEEL', 'LT', 'M&M', 'ONGC', 'SHREECEM',
+            'TATACONSUM', 'TATASTEEL', 'UPL', 'VEDL', 'WIPRO',
+            # Additional Indian stocks including SWIGGY
+            'SWIGGY', 'ZOMATO', 'PAYTM', 'NYKAA', 'DELHIVERY', 'POLICYBZR',
+            'CARTRADE', 'FINO', 'MAPMYINDIA', 'TATAPOWER', 'ADANIGREEN', 'ADANITRANS',
+            'ADANIGAS', 'ADANIPOWER', 'ADANIENT', 'ADANIPORTS', 'ADANIRETAIL',
+            'ADANITOTAL', 'ADANIWILMAR', 'AMBUJACEM', 'APOLLOHOSP', 'APOLLOTYRE',
+            'BAJAJ-AUTO', 'BAJAJFINSV', 'BAJFINANCE', 'BAJAJHLDNG', 'BERGEPAINT',
+            'BHARATFORG', 'BIOCON', 'BPCL', 'BRITANNIA', 'CADILAHC', 'CIPLA',
+            'COLPAL', 'DLF', 'DABUR', 'EICHERMOT', 'GAIL', 'GODREJCP', 'HCLTECH',
+            'HDFCAMC', 'HDFCLIFE', 'HEROMOTOCO', 'HINDALCO', 'HINDPETRO', 'ICICIGI',
+            'ICICIPRULI', 'INDUSINDBK', 'IOC', 'JINDALSTEL', 'JSWSTEEL', 'KOTAKBANK',
+            'LT', 'M&M', 'MARICO', 'NESTLEIND', 'NMDC', 'NTPC', 'ONGC', 'PEL',
+            'PIDILITIND', 'POWERGRID', 'PFC', 'RECLTD', 'SAIL', 'SBILIFE', 'SHREECEM',
+            'SIEMENS', 'SUNTV', 'TATACONSUM', 'TATAMOTORS', 'TATAPOWER', 'TATASTEEL',
+            'TECHM', 'TITAN', 'TORNTPHARM', 'ULTRACEMCO', 'UPL', 'VEDL', 'VOLTAS',
+            'WIPRO', 'ZEEL'
+        ]
+        
+        # Also check for common Indian stock suffixes
+        indian_suffixes = ['.NS', '.BO', '.NSE', '.BSE']
+        
+        ticker_upper = ticker.upper()
+        
+        # Check if ticker is in the patterns list
+        if ticker_upper in indian_patterns:
+            return True
+        
+        # Check if ticker has Indian suffixes
+        for suffix in indian_suffixes:
+            if ticker_upper.endswith(suffix):
+                return True
+        
+        # Additional check for common Indian company names
+        indian_keywords = ['RELIANCE', 'TCS', 'HDFC', 'ICICI', 'INFY', 'WIPRO', 
+                          'TATA', 'ADANI', 'BAJAJ', 'MARUTI', 'HINDALCO', 'ONGC',
+                          'SWIGGY', 'ZOMATO', 'PAYTM', 'NYKAA', 'DELHIVERY']
+        
+        for keyword in indian_keywords:
+            if keyword in ticker_upper:
+                return True
+        
+        return False
+    
+    def _download_from_yahoo(self, ticker: str, period: str, interval: str) -> Optional[pd.DataFrame]:
+        """Download data from yfinance."""
+        try:
+            stock = yf.Ticker(ticker)
+            data = stock.history(period=period, interval=interval)
+            
+            if data.empty:
+                print(f"⚠️ No data returned for {ticker} from yfinance")
+                return None
+            
+            # Basic preprocessing
+            data = self._preprocess_raw_data(data)
+            return data
+            
+        except Exception as e:
+            print(f"❌ Error downloading data for {ticker} from yfinance: {e}")
+            return None
+    
+    def _download_from_angel_one(self, ticker: str, period: str, interval: str) -> Optional[pd.DataFrame]:
+        """Download data from Angel One API using Indian Stock Mapper for symbol lookup."""
+        try:
+            from .angel_one_data_downloader import AngelOneDataDownloader
+            from data_downloaders.indian_stock_mapper import get_symbol_info, load_angel_master
+            
+            # Initialize Angel One downloader
+            angel_downloader = AngelOneDataDownloader()
+            
+            # Try to authenticate (this will use TOTP if configured)
+            if not angel_downloader.authenticate():
+                print(f"⚠️ Angel One authentication failed for {ticker}")
+                return None
+            
+            # Use Indian Stock Mapper to get symbol info
+            # Remove suffix for Angel One lookup
+            base_ticker = ticker
+            indian_suffixes = ['.NS', '.BO', '.NSE', '.BSE']
+            for suffix in indian_suffixes:
+                if base_ticker.upper().endswith(suffix):
+                    base_ticker = base_ticker[:-len(suffix)]
+                    break
+            
+            print(f"🔍 Looking up '{base_ticker}' in Angel One database...")
+            angel_master = load_angel_master()
+            symbol_info = get_symbol_info(base_ticker, angel_master)
+            
+            if not symbol_info:
+                print(f"⚠️ Symbol '{base_ticker}' not available in Angel One database")
+                print(f"   This is normal for unlisted/new companies")
+                print(f"   Falling back to yfinance...")
+                return None
+            
+            print(f"✅ Found '{base_ticker}' in Angel One: Token={symbol_info['token']}, Exchange={symbol_info['exchange']}")
+            
+            # Download data using the symbol info from mapper
+            df = angel_downloader.get_historical_data(
+                symbol_name=base_ticker,
+                exchange=symbol_info['exchange'],
+                interval=interval,
+                from_date=(datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d'),
+                to_date=datetime.now().strftime('%Y-%m-%d')
+            )
+            
+            if df is not None and not df.empty:
+                # Preprocess the data to match yfinance format
+                df = self._preprocess_raw_data(df)
+                print(f"✅ Successfully downloaded {len(df)} records for {ticker} from Angel One")
+                return df
+            else:
+                print(f"⚠️ No data available for {ticker} from Angel One")
+                return None
+                
+        except ImportError:
+            print("⚠️ Angel One integration not available (missing dependencies)")
+            return None
+        except Exception as e:
+            print(f"❌ Angel One download error for {ticker}: {e}")
+            return None
+    
+    def _get_current_price_from_yahoo(self, ticker: str) -> Optional[float]:
+        """Get current price from yfinance."""
+        try:
+            stock = yf.Ticker(ticker)
+            current_price = stock.info.get('regularMarketPrice')
+            
+            if current_price is None:
+                # Fallback: get latest close price
+                data = self.load_stock_data(ticker, period='5d')
+                if data is not None and not data.empty:
+                    current_price = data['Close'].iloc[-1]
+            
+            return current_price
+            
+        except Exception as e:
+            print(f"❌ Error getting current price from yfinance for {ticker}: {e}")
+            return None
+    
+    def _get_current_price_from_angel_one(self, ticker: str) -> Optional[float]:
+        """Get current price from Angel One API."""
+        try:
+            from .angel_one_data_downloader import AngelOneDataDownloader
+            
+            # Initialize Angel One downloader
+            angel_downloader = AngelOneDataDownloader()
+            
+            # Try to authenticate
+            if not angel_downloader.authenticate():
+                print(f"⚠️ Angel One authentication failed for {ticker}")
+                return None
+            
+            # Get symbol info - remove suffix for lookup
+            base_ticker = ticker
+            indian_suffixes = ['.NS', '.BO', '.NSE', '.BSE']
+            for suffix in indian_suffixes:
+                if base_ticker.upper().endswith(suffix):
+                    base_ticker = base_ticker[:-len(suffix)]
+                    break
+            
+            symbol_info = angel_downloader.config.get_symbol_info(base_ticker)
+            if not symbol_info:
+                print(f"⚠️ Symbol info not found for {base_ticker}")
+                return None
+            
+            # Get LTP data
+            ltp_data = angel_downloader.get_ltp_data(base_ticker, symbol_info['exchange'])
+            if ltp_data and 'ltp' in ltp_data:
+                return float(ltp_data['ltp'])
+            
+            return None
+            
+        except ImportError:
+            print("⚠️ Angel One integration not available (missing dependencies)")
+            return None
+        except Exception as e:
+            print(f"❌ Error getting current price from Angel One for {ticker}: {e}")
+            return None
+
+    def _download_from_yahoo_custom_dates(self, ticker: str, start_date: str, end_date: str, interval: str) -> Optional[pd.DataFrame]:
+        """Download data from yfinance for custom date range."""
+        try:
+            stock = yf.Ticker(ticker)
+            data = stock.history(start=start_date, end=end_date, interval=interval)
+            
+            if data.empty:
+                print(f"⚠️ No data returned for {ticker} from yfinance for period {start_date} to {end_date}")
+                return None
+            
+            # Basic preprocessing
+            data = self._preprocess_raw_data(data)
+            return data
+            
+        except Exception as e:
+            print(f"❌ Error downloading data for {ticker} from yfinance: {e}")
+            return None
+    
+    def _download_from_angel_one_custom_dates(self, ticker: str, start_date: str, end_date: str, interval: str) -> Optional[pd.DataFrame]:
+        """Download data from Angel One API for custom date range using Indian Stock Mapper."""
+        try:
+            from .angel_one_data_downloader import AngelOneDataDownloader
+            from data_downloaders.indian_stock_mapper import get_symbol_info, load_angel_master
+            
+            # Initialize Angel One downloader
+            angel_downloader = AngelOneDataDownloader()
+            
+            # Try to authenticate (this will use TOTP if configured)
+            if not angel_downloader.authenticate():
+                print(f"⚠️ Angel One authentication failed for {ticker}")
+                return None
+            
+            # Use Indian Stock Mapper to get symbol info
+            # Remove suffix for Angel One lookup
+            base_ticker = ticker
+            indian_suffixes = ['.NS', '.BO', '.NSE', '.BSE']
+            for suffix in indian_suffixes:
+                if base_ticker.upper().endswith(suffix):
+                    base_ticker = base_ticker[:-len(suffix)]
+                    break
+            
+            print(f"🔍 Looking up '{base_ticker}' in Angel One database...")
+            angel_master = load_angel_master()
+            symbol_info = get_symbol_info(base_ticker, angel_master)
+            
+            if not symbol_info:
+                print(f"⚠️ Symbol '{base_ticker}' not available in Angel One database")
+                print(f"   This is normal for unlisted/new companies")
+                print(f"   Falling back to yfinance...")
+                return None
+            
+            print(f"✅ Found '{base_ticker}' in Angel One: Token={symbol_info['token']}, Exchange={symbol_info['exchange']}")
+            
+            # Download data using the symbol info from mapper with custom dates
+            df = angel_downloader.get_historical_data(
+                symbol_name=base_ticker,
+                exchange=symbol_info['exchange'],
+                interval=interval,
+                from_date=start_date,
+                to_date=end_date
+            )
+            
+            if df is not None and not df.empty:
+                # Preprocess the data to match yfinance format
+                df = self._preprocess_raw_data(df)
+                print(f"✅ Successfully downloaded {len(df)} records for {ticker} from Angel One")
+                return df
+            else:
+                print(f"⚠️ No data available for {ticker} from Angel One")
+                return None
+                
+        except ImportError:
+            print("⚠️ Angel One integration not available (missing dependencies)")
+            return None
+        except Exception as e:
+            print(f"❌ Angel One download error for {ticker}: {e}")
+            return None

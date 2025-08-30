@@ -1,0 +1,81 @@
+{
+  "ticker": "TSLA",
+  "timestamp": "2025-08-29 23:45:47",
+  "fundamental": {
+    "eps": 2.2302158273381294,
+    "eps_growth": -52.81292134103904,
+    "net_profit_margin": 7.298597604667827,
+    "revenue_growth": 0.9475783534663594,
+    "dividend_yield": 0,
+    "dividend_announcement": "No Dividends",
+    "debt_to_equity": 13623000000.0,
+    "current_ratio": 0.0,
+    "roe": 713000000000.0,
+    "roa": 5.840910952732039,
+    "pe_ratio": 196.29411,
+    "pb_ratio": 13.915183,
+    "financial_health_score": 45.7482743460263
+  },
+  "global_markets": {
+    "dow_jones_change": -0.24469234325731645,
+    "nasdaq_change": -1.148413662780061,
+    "ftse_change": -0.31985001334516205,
+    "nikkei_change": -0.25758374215101504,
+    "sp500_change": -0.6605802032033883,
+    "global_volatility": 13.155599823684714,
+    "market_correlation": NaN,
+    "risk_sentiment": "Low Risk - Bearish",
+    "market_impact_score": 3.6670632164539403
+  },
+  "institutional": {
+    "fii_net_flow": 82.10718417411962,
+    "dii_net_flow": -82.96671586560718,
+    "fii_flow_trend": "Inflow",
+    "dii_flow_trend": "Outflow",
+    "institutional_sentiment": "Bearish",
+    "analyst_rating_change": "Hold by Goldman Sachs",
+    "analyst_consensus": "Hold",
+    "institutional_confidence": 50.0
+  },
+  "technical": {
+    "rsi": 46.694954310925894,
+    "sma_20": 332.55975036621095,
+    "sma_50": 323.7900994873047,
+    "macd": 5.8545739331487425,
+    "macd_signal": 5.148708120122377,
+    "macd_histogram": 0.7058658130263655,
+    "bb_upper": 357.23642861212113,
+    "bb_middle": 332.55975036621095,
+    "bb_lower": 307.88307212030077,
+    "bb_position": 0.5221919741824945,
+    "volume_sma": 74459142.1,
+    "volume_ratio": 0.7577382764392608,
+    "price_momentum": 7.8881808974137435,
+    "volatility": 2.273924283124087,
+    "vix_current": 19.60005159008281
+  },
+  "sentiment": [
+    {
+      "ticker": "TSLA",
+      "analysis_date": "2025-08-29 23:45:47",
+      "total_headlines": 5,
+      "avg_vader_compound": 0.13810000000000003,
+      "avg_textblob_polarity": 0.14121212121212118,
+      "avg_textblob_subjectivity": 0.3284848484848485,
+      "sentiment_score": 0.13965606060606062,
+      "sentiment_label": "positive"
+    }
+  ],
+  "enhanced_prediction_score": 11.631911217894695,
+  "variable_coverage": {
+    "overall_coverage": "13/25 (52.0%)",
+    "category_breakdown": {
+      "company_specific": "5/9 (55.6%)",
+      "economic": "0/7 (0.0%)",
+      "market_sentiment": "4/6 (66.7%)",
+      "global": "4/6 (66.7%)",
+      "regulatory": "0/5 (0.0%)"
+    },
+    "phase1_improvement": "+3 variables"
+  }
+}

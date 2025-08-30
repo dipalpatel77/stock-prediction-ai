@@ -1,0 +1,57 @@
+{
+  "ticker": "AAPL",
+  "timestamp": "2025-08-29 00:27:03",
+  "fundamental": {
+    "eps": 6.109054070954992,
+    "eps_growth": -0.8378179446303692,
+    "net_profit_margin": 23.971255769943866,
+    "revenue_growth": 2.021994077514121,
+    "dividend_yield": 45.0,
+    "dividend_announcement": "Recent: 0.26",
+    "debt_to_equity": 106629000000.0,
+    "current_ratio": 0.0,
+    "roe": 9373600000000.0,
+    "roa": 25.682503150857585,
+    "pe_ratio": 35.33232,
+    "pb_ratio": 52.547955,
+    "financial_health_score": 70.0
+  },
+  "global_markets": {
+    "dow_jones_change": 0.08541600689823853,
+    "nasdaq_change": 0.6365868864213124,
+    "ftse_change": -0.41791367295122134,
+    "nikkei_change": 0.7255833511875727,
+    "sp500_change": 0.3363470855062206,
+    "global_volatility": 11.00923501482283,
+    "market_correlation": NaN,
+    "risk_sentiment": "Low Risk - Bullish",
+    "market_impact_score": 2.160575551547238
+  },
+  "institutional": {
+    "fii_net_flow": 383.10390077453565,
+    "dii_net_flow": 301.50904032818687,
+    "fii_flow_trend": "Inflow",
+    "dii_flow_trend": "Inflow",
+    "institutional_sentiment": "Very Bullish",
+    "analyst_rating_change": "Buy by Goldman Sachs",
+    "analyst_consensus": "Strong Buy",
+    "institutional_confidence": 100
+  },
+  "technical": {
+    "rsi": 57.41529714822992,
+    "sma_20": 224.2174415588379,
+    "sma_50": 214.6725296020508,
+    "macd": 4.709963184637644,
+    "macd_signal": 4.76093050239406,
+    "macd_histogram": -0.05096731775641583,
+    "bb_upper": 245.06213156632512,
+    "bb_middle": 224.2174415588379,
+    "bb_lower": 203.37275155135066,
+    "bb_position": 0.7082677251263461,
+    "volume_sma": 58135293.1,
+    "volume_ratio": 0.3815008201962604,
+    "price_momentum": 15.211137924936025,
+    "volatility": 1.867400737754672,
+    "vix_current": 22.303273264224927
+  },
+  "sentiment": 

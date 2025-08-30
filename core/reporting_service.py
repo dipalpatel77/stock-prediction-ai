@@ -27,6 +27,9 @@ except ImportError:
 
 warnings.filterwarnings('ignore')
 
+# Import currency utilities
+from .currency_utils import get_currency_symbol, format_price
+
 # Set style for matplotlib
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")
@@ -231,7 +234,8 @@ class ReportingService:
         
         ax.set_title(f'{ticker} Price Prediction', fontsize=16, fontweight='bold')
         ax.set_xlabel('Date', fontsize=12)
-        ax.set_ylabel('Price ($)', fontsize=12)
+        currency = get_currency_symbol(ticker)
+        ax.set_ylabel(f'Price ({currency})', fontsize=12)
         ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
         
@@ -284,7 +288,8 @@ class ReportingService:
             axes[2].fill_between(data['Date'], data['BB_Upper'], data['BB_Lower'], 
                                alpha=0.1, color=self.colors['warning'])
             axes[2].set_title('Bollinger Bands', fontweight='bold')
-            axes[2].set_ylabel('Price ($)')
+            currency = get_currency_symbol(ticker)
+            axes[2].set_ylabel(f'Price ({currency})')
             axes[2].legend()
             axes[2].grid(True, alpha=0.3)
         
@@ -444,7 +449,8 @@ class ReportingService:
         ax1 = fig.add_subplot(gs[0, :2])
         ax1.plot(data['Date'], data['Close'], color=self.colors['primary'])
         ax1.set_title(f'{ticker} Price Trend', fontweight='bold')
-        ax1.set_ylabel('Price ($)')
+        currency = get_currency_symbol(ticker)
+        ax1.set_ylabel(f'Price ({currency})')
         ax1.grid(True, alpha=0.3)
         
         # Volume
