@@ -1,0 +1,81 @@
+{
+  "ticker": "SYNGENE",
+  "timestamp": "2025-08-29 04:12:40",
+  "fundamental": {
+    "eps": 0.0,
+    "eps_growth": 0.0,
+    "net_profit_margin": 0.0,
+    "revenue_growth": 0.0,
+    "dividend_yield": 0,
+    "dividend_announcement": "No Dividends",
+    "debt_to_equity": 0.0,
+    "current_ratio": 0.0,
+    "roe": 0.0,
+    "roa": 0.0,
+    "pe_ratio": 0,
+    "pb_ratio": 0,
+    "financial_health_score": 15.0
+  },
+  "global_markets": {
+    "dow_jones_change": 0.1572909870091696,
+    "nasdaq_change": 0.5327339239115635,
+    "ftse_change": -0.41791367295122134,
+    "nikkei_change": 0.7255833511875727,
+    "sp500_change": 0.31567253988335914,
+    "global_volatility": 10.745972374714432,
+    "market_correlation": NaN,
+    "risk_sentiment": "Low Risk - Bullish",
+    "market_impact_score": 0.0
+  },
+  "institutional": {
+    "fii_net_flow": 0.12815304356353485,
+    "dii_net_flow": 0.11411632360174136,
+    "fii_flow_trend": "Inflow",
+    "dii_flow_trend": "Inflow",
+    "institutional_sentiment": "Bullish",
+    "analyst_rating_change": "No Change",
+    "analyst_consensus": "No Consensus",
+    "institutional_confidence": 65.0
+  },
+  "technical": {
+    "rsi": 50.0,
+    "sma_20": 0.0,
+    "sma_50": 0.0,
+    "macd": 0.0,
+    "macd_signal": 0.0,
+    "macd_histogram": 0.0,
+    "bb_upper": 0.0,
+    "bb_middle": 0.0,
+    "bb_lower": 0.0,
+    "bb_position": 0.5,
+    "volume_sma": 0.0,
+    "volume_ratio": 1.0,
+    "price_momentum": 0.0,
+    "volatility": 0.0,
+    "vix_current": 20.0
+  },
+  "sentiment": [
+    {
+      "ticker": "SYNGENE",
+      "analysis_date": "2025-08-29 04:12:40",
+      "total_headlines": 5,
+      "avg_vader_compound": 0.13810000000000003,
+      "avg_textblob_polarity": 0.14121212121212118,
+      "avg_textblob_subjectivity": 0.3284848484848485,
+      "sentiment_score": 0.13965606060606062,
+      "sentiment_label": "positive"
+    }
+  ],
+  "enhanced_prediction_score": 12.741211346835827,
+  "variable_coverage": {
+    "overall_coverage": "9/25 (36.0%)",
+    "category_breakdown": {
+      "company_specific": "1/9 (11.1%)",
+      "economic": "0/7 (0.0%)",
+      "market_sentiment": "4/6 (66.7%)",
+      "global": "4/6 (66.7%)",
+      "regulatory": "0/5 (0.0%)"
+    },
+    "phase1_improvement": "+-1 variables"
+  }
+}

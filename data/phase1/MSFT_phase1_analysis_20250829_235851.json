@@ -1,0 +1,81 @@
+{
+  "ticker": "MSFT",
+  "timestamp": "2025-08-29 23:58:51",
+  "fundamental": {
+    "eps": 13.699986546481904,
+    "eps_growth": 15.508532298841596,
+    "net_profit_margin": 36.146015248967075,
+    "revenue_growth": 14.93215623240672,
+    "dividend_yield": 65.0,
+    "dividend_announcement": "Recent: 0.83",
+    "debt_to_equity": 60588000000.0,
+    "current_ratio": 0.0,
+    "roe": 10183200000000.0,
+    "roa": 16.450970350709124,
+    "pe_ratio": 37.23609,
+    "pb_ratio": 11.008679,
+    "financial_health_score": 70.0
+  },
+  "global_markets": {
+    "dow_jones_change": -0.26831357958144475,
+    "nasdaq_change": -1.2578254440718608,
+    "ftse_change": -0.31985001334516205,
+    "nikkei_change": -0.25758374215101504,
+    "sp500_change": -0.72179345602642,
+    "global_volatility": 14.126831175879515,
+    "market_correlation": NaN,
+    "risk_sentiment": "Low Risk - Bearish",
+    "market_impact_score": 3.491344586926843
+  },
+  "institutional": {
+    "fii_net_flow": 375.8926088801348,
+    "dii_net_flow": 326.30324068658524,
+    "fii_flow_trend": "Inflow",
+    "dii_flow_trend": "Inflow",
+    "institutional_sentiment": "Very Bullish",
+    "analyst_rating_change": "Hold by Bank of America",
+    "analyst_consensus": "Hold",
+    "institutional_confidence": 85.0
+  },
+  "technical": {
+    "rsi": 38.23887183321836,
+    "sma_20": 515.4855453491211,
+    "sma_50": 507.6811999511719,
+    "macd": -1.4384506259081036,
+    "macd_signal": 0.0854442583704491,
+    "macd_histogram": -1.5238948842785527,
+    "bb_upper": 534.4507703878777,
+    "bb_middle": 515.4855453491211,
+    "bb_lower": 496.5203203103646,
+    "bb_position": 0.3196552816676263,
+    "volume_sma": 20700444.95,
+    "volume_ratio": 0.43812579980315836,
+    "price_momentum": -4.8836657736331945,
+    "volatility": 0.9672224922731374,
+    "vix_current": 12.20298008360884
+  },
+  "sentiment": [
+    {
+      "ticker": "MSFT",
+      "analysis_date": "2025-08-29 23:58:51",
+      "total_headlines": 5,
+      "avg_vader_compound": 0.13810000000000003,
+      "avg_textblob_polarity": 0.14121212121212118,
+      "avg_textblob_subjectivity": 0.3284848484848485,
+      "sentiment_score": 0.13965606060606062,
+      "sentiment_label": "positive"
+    }
+  ],
+  "enhanced_prediction_score": 14.850334808466222,
+  "variable_coverage": {
+    "overall_coverage": "13/25 (52.0%)",
+    "category_breakdown": {
+      "company_specific": "5/9 (55.6%)",
+      "economic": "0/7 (0.0%)",
+      "market_sentiment": "4/6 (66.7%)",
+      "global": "4/6 (66.7%)",
+      "regulatory": "0/5 (0.0%)"
+    },
+    "phase1_improvement": "+3 variables"
+  }
+}

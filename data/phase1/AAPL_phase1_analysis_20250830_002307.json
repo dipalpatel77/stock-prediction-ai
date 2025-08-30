@@ -1,0 +1,81 @@
+{
+  "ticker": "AAPL",
+  "timestamp": "2025-08-30 00:23:07",
+  "fundamental": {
+    "eps": 6.109054070954992,
+    "eps_growth": -0.8378179446303692,
+    "net_profit_margin": 23.971255769943866,
+    "revenue_growth": 2.021994077514121,
+    "dividend_yield": 45.0,
+    "dividend_announcement": "Recent: 0.26",
+    "debt_to_equity": 106629000000.0,
+    "current_ratio": 0.0,
+    "roe": 9373600000000.0,
+    "roa": 25.682503150857585,
+    "pe_ratio": 35.262585,
+    "pb_ratio": 52.364655,
+    "financial_health_score": 70.0
+  },
+  "global_markets": {
+    "dow_jones_change": -0.27002272284051543,
+    "nasdaq_change": -1.2259712645261478,
+    "ftse_change": -0.31985001334516205,
+    "nikkei_change": -0.25758374215101504,
+    "sp500_change": -0.6951856853269652,
+    "global_volatility": 13.843067140949028,
+    "market_correlation": NaN,
+    "risk_sentiment": "Low Risk - Bearish",
+    "market_impact_score": 4.340602017194319
+  },
+  "institutional": {
+    "fii_net_flow": 402.8367197679333,
+    "dii_net_flow": 256.10372041832215,
+    "fii_flow_trend": "Inflow",
+    "dii_flow_trend": "Inflow",
+    "institutional_sentiment": "Very Bullish",
+    "analyst_rating_change": "Buy by JP Morgan",
+    "analyst_consensus": "Strong Buy",
+    "institutional_confidence": 100
+  },
+  "technical": {
+    "rsi": 60.16676924096295,
+    "sma_20": 225.69540710449218,
+    "sma_50": 215.37958465576173,
+    "macd": 4.640482937622977,
+    "macd_signal": 4.717459537909782,
+    "macd_histogram": -0.07697660028680531,
+    "bb_upper": 243.9843481322389,
+    "bb_middle": 225.69540710449218,
+    "bb_lower": 207.40646607674546,
+    "bb_position": 0.6737249063819936,
+    "volume_sma": 54895750.95,
+    "volume_ratio": 0.4320647516344796,
+    "price_momentum": 14.24304700570682,
+    "volatility": 1.731762165726062,
+    "vix_current": 12.941241977678192
+  },
+  "sentiment": [
+    {
+      "ticker": "AAPL",
+      "analysis_date": "2025-08-30 00:23:07",
+      "total_headlines": 5,
+      "avg_vader_compound": 0.13810000000000003,
+      "avg_textblob_polarity": 0.14121212121212118,
+      "avg_textblob_subjectivity": 0.3284848484848485,
+      "sentiment_score": 0.13965606060606062,
+      "sentiment_label": "positive"
+    }
+  ],
+  "enhanced_prediction_score": 14.916170119669188,
+  "variable_coverage": {
+    "overall_coverage": "13/25 (52.0%)",
+    "category_breakdown": {
+      "company_specific": "5/9 (55.6%)",
+      "economic": "0/7 (0.0%)",
+      "market_sentiment": "4/6 (66.7%)",
+      "global": "4/6 (66.7%)",
+      "regulatory": "0/5 (0.0%)"
+    },
+    "phase1_improvement": "+3 variables"
+  }
+}

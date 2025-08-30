@@ -1,0 +1,14 @@
+category,metric,value
+variable_coverage,phase1_total,23.0
+variable_coverage,phase2_total,43.0
+variable_coverage,phase1_percentage,69.6969696969697
+variable_coverage,phase2_percentage,130.3030303030303
+variable_coverage,improvement,60.60606060606061
+variable_coverage,total_possible,33.0
+prediction_scores,phase1_score,11.740807834940503
+prediction_scores,phase2_score,34.05
+prediction_scores,difference,22.309192165059493
+prediction_scores,improvement_pct,190.01411554209758
+feature_richness,phase1_features,4.0
+feature_richness,phase2_features,9.0
+feature_richness,feature_improvement,5.0
