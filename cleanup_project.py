@@ -1,292 +1,380 @@
 #!/usr/bin/env python3
 """
-AI Stock Predictor - Project Cleanup Script
-Safely removes temporary, generated, and non-essential files
+Project Cleanup Script
+Cleans up duplicate files, old data, and optimizes the project structure
 """
 
 import os
 import shutil
 import glob
 from pathlib import Path
-import sys
+from typing import Dict, List, Tuple
+import argparse
+from datetime import datetime, timedelta
 
 class ProjectCleanup:
-    def __init__(self):
-        self.project_root = Path.cwd()
-        self.deleted_files = []
-        self.deleted_dirs = []
-        self.total_size_saved = 0
+    """Handles project cleanup and optimization."""
+    
+    def __init__(self, project_root: str = "."):
+        self.project_root = Path(project_root)
+        self.cleanup_log = []
         
-    def get_file_size(self, file_path):
-        """Get file size in bytes."""
-        try:
-            return os.path.getsize(file_path)
-        except:
-            return 0
-    
-    def get_dir_size(self, dir_path):
-        """Get directory size in bytes."""
-        total_size = 0
-        try:
-            for dirpath, dirnames, filenames in os.walk(dir_path):
-                for filename in filenames:
-                    filepath = os.path.join(dirpath, filename)
-                    total_size += self.get_file_size(filepath)
-        except:
-            pass
-        return total_size
-    
-    def format_size(self, size_bytes):
-        """Format size in human readable format."""
-        if size_bytes == 0:
-            return "0B"
-        size_names = ["B", "KB", "MB", "GB"]
-        i = 0
-        while size_bytes >= 1024 and i < len(size_names) - 1:
-            size_bytes /= 1024.0
-            i += 1
-        return f"{size_bytes:.1f}{size_names[i]}"
-    
-    def safe_delete_file(self, file_path):
-        """Safely delete a file and track statistics."""
-        if os.path.exists(file_path):
-            size = self.get_file_size(file_path)
-            try:
-                os.remove(file_path)
-                self.deleted_files.append(str(file_path))
-                self.total_size_saved += size
-                return True, size
-            except Exception as e:
-                print(f"❌ Failed to delete {file_path}: {e}")
-                return False, 0
-        return False, 0
-    
-    def safe_delete_dir(self, dir_path):
-        """Safely delete a directory and track statistics."""
-        if os.path.exists(dir_path):
-            size = self.get_dir_size(dir_path)
-            try:
-                shutil.rmtree(dir_path)
-                self.deleted_dirs.append(str(dir_path))
-                self.total_size_saved += size
-                return True, size
-            except Exception as e:
-                print(f"❌ Failed to delete {dir_path}: {e}")
-                return False, 0
-        return False, 0
-    
-    def cleanup_generated_data(self):
-        """Clean up generated data files."""
-        print("🗑️ Cleaning up generated data files...")
+        # Define cleanup patterns
+        self.cleanup_patterns = {
+            "duplicate_files": [
+                "**/*.pyc",
+                "**/__pycache__",
+                "**/*.pyo", 
+                "**/*.pyd",
+                "**/.DS_Store",
+                "**/Thumbs.db"
+            ],
+            "temp_files": [
+                "**/*.tmp",
+                "**/*.temp",
+                "**/*.log",
+                "**/*.bak",
+                "**/*.swp",
+                "**/*.swo"
+            ],
+            "cache_dirs": [
+                "**/cache",
+                "**/.cache",
+                "**/tmp",
+                "**/.tmp"
+            ]
+        }
         
-        # Data directory files
-        data_patterns = [
-            "data/*.csv",
-            "data/*.pkl",
-            "data/cache/*",
-            "data/angel_one_cache/*"
-        ]
+        # File size thresholds (in MB)
+        self.size_thresholds = {
+            "large_files": 100,  # 100MB
+            "medium_files": 50,  # 50MB
+            "small_files": 1     # 1MB
+        }
+    
+    def log_action(self, action: str, details: str):
+        """Log cleanup actions."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"[{timestamp}] {action}: {details}"
+        self.cleanup_log.append(log_entry)
+        print(f"  {action}: {details}")
+    
+    def find_duplicate_files(self) -> List[Tuple[Path, Path]]:
+        """Find duplicate files in the project."""
+        print("🔍 Searching for duplicate files...")
+        
+        duplicates = []
+        file_hashes = {}
+        
+        # Get all files
+        all_files = []
+        for pattern in ["**/*.csv", "**/*.json", "**/*.pkl", "**/*.h5"]:
+            all_files.extend(self.project_root.glob(pattern))
+        
+        for file_path in all_files:
+            if file_path.is_file():
+                try:
+                    # Simple duplicate detection by name and size
+                    file_key = (file_path.name, file_path.stat().st_size)
+                    
+                    if file_key in file_hashes:
+                        duplicates.append((file_hashes[file_key], file_path))
+                    else:
+                        file_hashes[file_key] = file_path
+                        
+                except Exception as e:
+                    self.log_action("ERROR", f"Could not process {file_path}: {e}")
+        
+        return duplicates
+    
+    def remove_duplicate_files(self, duplicates: List[Tuple[Path, Path]]) -> int:
+        """Remove duplicate files."""
+        print(f"🗑️ Removing {len(duplicates)} duplicate files...")
+        
+        removed_count = 0
+        for original, duplicate in duplicates:
+            try:
+                # Keep the one in a more organized location
+                if "data/by_ticker" in str(original) or "data/by_type" in str(original):
+                    # Keep original, remove duplicate
+                    duplicate.unlink()
+                    self.log_action("REMOVED", f"Duplicate: {duplicate.relative_to(self.project_root)}")
+                    removed_count += 1
+                elif "data/by_ticker" in str(duplicate) or "data/by_type" in str(duplicate):
+                    # Keep duplicate, remove original
+                    original.unlink()
+                    self.log_action("REMOVED", f"Original: {original.relative_to(self.project_root)}")
+                    removed_count += 1
+                else:
+                    # Remove the one with longer path (usually less organized)
+                    if len(str(original)) > len(str(duplicate)):
+                        original.unlink()
+                        self.log_action("REMOVED", f"Longer path: {original.relative_to(self.project_root)}")
+                    else:
+                        duplicate.unlink()
+                        self.log_action("REMOVED", f"Longer path: {duplicate.relative_to(self.project_root)}")
+                    removed_count += 1
+                    
+            except Exception as e:
+                self.log_action("ERROR", f"Could not remove duplicate: {e}")
+        
+        return removed_count
+    
+    def clean_cache_files(self) -> int:
+        """Clean cache and temporary files."""
+        print("🧹 Cleaning cache and temporary files...")
+        
+        removed_count = 0
+        
+        for pattern in self.cleanup_patterns["duplicate_files"]:
+            for file_path in self.project_root.glob(pattern):
+                try:
+                    if file_path.is_file():
+                        file_path.unlink()
+                        self.log_action("REMOVED", f"Cache file: {file_path.relative_to(self.project_root)}")
+                        removed_count += 1
+                    elif file_path.is_dir():
+                        shutil.rmtree(file_path)
+                        self.log_action("REMOVED", f"Cache dir: {file_path.relative_to(self.project_root)}")
+                        removed_count += 1
+                except Exception as e:
+                    self.log_action("ERROR", f"Could not remove {file_path}: {e}")
+        
+        return removed_count
+    
+    def clean_temp_files(self) -> int:
+        """Clean temporary files."""
+        print("🧹 Cleaning temporary files...")
+        
+        removed_count = 0
+        
+        for pattern in self.cleanup_patterns["temp_files"]:
+            for file_path in self.project_root.glob(pattern):
+                try:
+                    if file_path.is_file():
+                        file_path.unlink()
+                        self.log_action("REMOVED", f"Temp file: {file_path.relative_to(self.project_root)}")
+                        removed_count += 1
+                except Exception as e:
+                    self.log_action("ERROR", f"Could not remove {file_path}: {e}")
+        
+        return removed_count
+    
+    def archive_old_data(self, days_old: int = 30) -> int:
+        """Archive old data files."""
+        print(f"📦 Archiving data older than {days_old} days...")
+        
+        cutoff_date = datetime.now() - timedelta(days=days_old)
+        archived_count = 0
+        
+        # Create archive directory
+        archive_dir = self.project_root / "archive"
+        archive_dir.mkdir(exist_ok=True)
+        
+        # Find old data files
+        data_patterns = ["data/**/*.csv", "data/**/*.json"]
         
         for pattern in data_patterns:
-            for file_path in glob.glob(pattern):
-                if os.path.isfile(file_path):
-                    success, size = self.safe_delete_file(file_path)
-                    if success:
-                        print(f"   ✅ Deleted: {file_path} ({self.format_size(size)})")
+            for file_path in self.project_root.glob(pattern):
+                try:
+                    if file_path.is_file():
+                        file_time = datetime.fromtimestamp(file_path.stat().st_mtime)
+                        
+                        if file_time < cutoff_date:
+                            # Create archive subdirectory
+                            relative_path = file_path.relative_to(self.project_root)
+                            archive_path = archive_dir / relative_path
+                            archive_path.parent.mkdir(parents=True, exist_ok=True)
+                            
+                            # Move file to archive
+                            shutil.move(str(file_path), str(archive_path))
+                            self.log_action("ARCHIVED", f"Old data: {relative_path}")
+                            archived_count += 1
+                            
+                except Exception as e:
+                    self.log_action("ERROR", f"Could not archive {file_path}: {e}")
         
-        # Angel data cache and exports
-        angel_patterns = [
-            "angel_data/cache/*",
-            "angel_data/exports/*"
-        ]
-        
-        for pattern in angel_patterns:
-            for file_path in glob.glob(pattern):
-                if os.path.isfile(file_path):
-                    success, size = self.safe_delete_file(file_path)
-                    if success:
-                        print(f"   ✅ Deleted: {file_path} ({self.format_size(size)})")
+        return archived_count
     
-    def cleanup_generated_models(self):
-        """Clean up generated model files."""
-        print("🗑️ Cleaning up generated model files...")
+    def optimize_large_files(self) -> Dict[str, int]:
+        """Identify and report large files."""
+        print("📊 Analyzing file sizes...")
         
-        model_patterns = [
-            "models/*.pkl",
-            "models/*.h5",
-            "models/cache/*"
-        ]
+        size_stats = {
+            "large_files": 0,
+            "medium_files": 0,
+            "small_files": 0,
+            "total_size": 0
+        }
         
-        for pattern in model_patterns:
-            for file_path in glob.glob(pattern):
-                if os.path.isfile(file_path):
-                    success, size = self.safe_delete_file(file_path)
-                    if success:
-                        print(f"   ✅ Deleted: {file_path} ({self.format_size(size)})")
+        large_files = []
+        
+        for file_path in self.project_root.rglob("*"):
+            if file_path.is_file():
+                try:
+                    size_mb = file_path.stat().st_size / (1024 * 1024)
+                    size_stats["total_size"] += size_mb
+                    
+                    if size_mb > self.size_thresholds["large_files"]:
+                        size_stats["large_files"] += 1
+                        large_files.append((file_path, size_mb))
+                    elif size_mb > self.size_thresholds["medium_files"]:
+                        size_stats["medium_files"] += 1
+                    else:
+                        size_stats["small_files"] += 1
+                        
+                except Exception as e:
+                    self.log_action("ERROR", f"Could not analyze {file_path}: {e}")
+        
+        # Report large files
+        if large_files:
+            print("\n📋 Large files found:")
+            for file_path, size_mb in sorted(large_files, key=lambda x: x[1], reverse=True):
+                print(f"  📁 {file_path.relative_to(self.project_root)}: {size_mb:.1f} MB")
+        
+        return size_stats
     
-    def cleanup_cache_directories(self):
-        """Clean up cache directories."""
-        print("🗑️ Cleaning up cache directories...")
+    def clean_empty_directories(self) -> int:
+        """Remove empty directories."""
+        print("🗂️ Removing empty directories...")
         
-        cache_dirs = [
-            "logs",
-            "catboost_info",
-            "reports"
-        ]
+        removed_count = 0
         
-        for dir_name in cache_dirs:
-            dir_path = Path(dir_name)
-            if dir_path.exists():
-                success, size = self.safe_delete_dir(dir_path)
-                if success:
-                    print(f"   ✅ Deleted directory: {dir_name} ({self.format_size(size)})")
-    
-    def cleanup_python_cache(self):
-        """Clean up Python cache files."""
-        print("🗑️ Cleaning up Python cache...")
-        
-        # Find all __pycache__ directories
-        for root, dirs, files in os.walk("."):
+        # Find empty directories (bottom-up)
+        for root, dirs, files in os.walk(self.project_root, topdown=False):
             for dir_name in dirs:
-                if dir_name == "__pycache__":
-                    cache_dir = os.path.join(root, dir_name)
-                    success, size = self.safe_delete_dir(cache_dir)
-                    if success:
-                        print(f"   ✅ Deleted: {cache_dir} ({self.format_size(size)})")
+                dir_path = Path(root) / dir_name
+                try:
+                    if not any(dir_path.iterdir()):  # Directory is empty
+                        dir_path.rmdir()
+                        self.log_action("REMOVED", f"Empty dir: {dir_path.relative_to(self.project_root)}")
+                        removed_count += 1
+                except Exception as e:
+                    self.log_action("ERROR", f"Could not remove {dir_path}: {e}")
         
-        # Find all .pyc files
-        for root, dirs, files in os.walk("."):
-            for file_name in files:
-                if file_name.endswith(".pyc"):
-                    pyc_file = os.path.join(root, file_name)
-                    success, size = self.safe_delete_file(pyc_file)
-                    if success:
-                        print(f"   ✅ Deleted: {pyc_file} ({self.format_size(size)})")
+        return removed_count
     
-    def cleanup_development_files(self):
-        """Clean up development files."""
-        print("🗑️ Cleaning up development files...")
-        
-        dev_dirs = [
-            ".vscode",
-            "tests",
-            "notebooks"
-        ]
-        
-        for dir_name in dev_dirs:
-            dir_path = Path(dir_name)
-            if dir_path.exists():
-                success, size = self.safe_delete_dir(dir_path)
-                if success:
-                    print(f"   ✅ Deleted directory: {dir_name} ({self.format_size(size)})")
+    def generate_cleanup_report(self) -> bool:
+        """Generate a cleanup report."""
+        try:
+            report_file = self.project_root / "cleanup_report.md"
+            
+            report_content = f"""# 🧹 Project Cleanup Report
+
+Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+## 📊 Cleanup Summary
+
+### Actions Performed:
+{chr(10).join(f"- {log}" for log in self.cleanup_log)}
+
+### File Size Analysis:
+- Total project size: {self.optimize_large_files()['total_size']:.1f} MB
+- Large files (>100MB): {self.optimize_large_files()['large_files']}
+- Medium files (50-100MB): {self.optimize_large_files()['medium_files']}
+- Small files (<50MB): {self.optimize_large_files()['small_files']}
+
+## 💡 Recommendations
+
+1. **Regular Cleanup**: Run this script weekly to maintain project health
+2. **Archive Old Data**: Consider archiving data older than 30 days
+3. **Monitor Large Files**: Keep an eye on files larger than 100MB
+4. **Version Control**: Use .gitignore to exclude cache and temp files
+
+## 🔄 Next Steps
+
+1. Review the cleanup log above
+2. Test your application to ensure nothing important was removed
+3. Update .gitignore if needed
+4. Consider setting up automated cleanup
+
+---
+*This report was generated by the Project Cleanup Script*
+"""
+            
+            with open(report_file, 'w', encoding='utf-8') as f:
+                f.write(report_content)
+            
+            print(f"✅ Cleanup report saved: {report_file}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to generate report: {e}")
+            return False
     
-    def cleanup_test_files(self):
-        """Clean up test files."""
-        print("🗑️ Cleaning up test files...")
-        
-        test_files = [
-            "test_historical_data_selection.py",
-            "simple_mapper_test.py",
-            "test_unified_with_mapper.py",
-            "test_caching.py"
-        ]
-        
-        for file_name in test_files:
-            file_path = Path(file_name)
-            if file_path.exists():
-                success, size = self.safe_delete_file(file_path)
-                if success:
-                    print(f"   ✅ Deleted: {file_name} ({self.format_size(size)})")
-    
-    def cleanup_documentation_files(self):
-        """Clean up documentation files (optional)."""
-        print("🗑️ Cleaning up documentation files...")
-        
-        doc_patterns = [
-            "*SUMMARY.md",
-            "*GUIDE.md",
-            "*COMPARISON.md"
-        ]
-        
-        for pattern in doc_patterns:
-            for file_path in glob.glob(pattern):
-                if os.path.isfile(file_path) and file_path != "README.md":
-                    success, size = self.safe_delete_file(file_path)
-                    if success:
-                        print(f"   ✅ Deleted: {file_path} ({self.format_size(size)})")
-    
-    def run_cleanup(self, include_tests=True, include_docs=False):
+    def run_cleanup(self, archive_days: int = 30, remove_duplicates: bool = True) -> bool:
         """Run the complete cleanup process."""
-        print("🚀 AI Stock Predictor - Project Cleanup")
-        print("=" * 50)
-        print("This script will safely remove temporary and generated files.")
-        print("Core functionality will be preserved.")
-        print()
+        print("🚀 Starting project cleanup...")
+        print("=" * 60)
         
-        # Phase 1: Safe deletions
-        self.cleanup_generated_data()
-        self.cleanup_generated_models()
-        self.cleanup_cache_directories()
-        self.cleanup_python_cache()
-        self.cleanup_development_files()
-        
-        # Phase 2: Optional deletions
-        if include_tests:
-            self.cleanup_test_files()
-        
-        if include_docs:
-            self.cleanup_documentation_files()
-        
-        # Summary
-        self.print_summary()
-    
-    def print_summary(self):
-        """Print cleanup summary."""
-        print("\n" + "=" * 50)
-        print("📊 CLEANUP SUMMARY")
-        print("=" * 50)
-        print(f"🗑️ Files deleted: {len(self.deleted_files)}")
-        print(f"🗑️ Directories deleted: {len(self.deleted_dirs)}")
-        print(f"💾 Total space saved: {self.format_size(self.total_size_saved)}")
-        print()
-        
-        if self.deleted_files:
-            print("📄 Deleted files:")
-            for file_path in self.deleted_files[:10]:  # Show first 10
-                print(f"   - {file_path}")
-            if len(self.deleted_files) > 10:
-                print(f"   ... and {len(self.deleted_files) - 10} more files")
-        
-        if self.deleted_dirs:
-            print("\n📁 Deleted directories:")
-            for dir_path in self.deleted_dirs:
-                print(f"   - {dir_path}")
-        
-        print("\n✅ Cleanup completed successfully!")
-        print("🎯 Core functionality preserved.")
-        print("🔄 Generated files can be recreated when needed.")
+        try:
+            total_removed = 0
+            
+            # Step 1: Remove duplicate files
+            if remove_duplicates:
+                duplicates = self.find_duplicate_files()
+                removed = self.remove_duplicate_files(duplicates)
+                total_removed += removed
+                print(f"✅ Removed {removed} duplicate files")
+            
+            # Step 2: Clean cache files
+            removed = self.clean_cache_files()
+            total_removed += removed
+            print(f"✅ Removed {removed} cache files")
+            
+            # Step 3: Clean temp files
+            removed = self.clean_temp_files()
+            total_removed += removed
+            print(f"✅ Removed {removed} temporary files")
+            
+            # Step 4: Archive old data
+            archived = self.archive_old_data(archive_days)
+            print(f"✅ Archived {archived} old data files")
+            
+            # Step 5: Remove empty directories
+            removed = self.clean_empty_directories()
+            total_removed += removed
+            print(f"✅ Removed {removed} empty directories")
+            
+            # Step 6: Analyze file sizes
+            size_stats = self.optimize_large_files()
+            print(f"✅ Analyzed {size_stats['total_size']:.1f} MB of data")
+            
+            # Step 7: Generate report
+            self.generate_cleanup_report()
+            
+            print("=" * 60)
+            print(f"🎉 Cleanup completed! Removed {total_removed} items")
+            print("📋 Check cleanup_report.md for details")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Cleanup failed: {e}")
+            return False
 
 def main():
     """Main function."""
-    cleanup = ProjectCleanup()
+    parser = argparse.ArgumentParser(description="Clean up AI Stock Predictor project")
+    parser.add_argument("--no-duplicates", action="store_true",
+                       help="Skip duplicate file removal")
+    parser.add_argument("--archive-days", type=int, default=30,
+                       help="Archive data older than N days (default: 30)")
+    parser.add_argument("--project-root", default=".",
+                       help="Project root directory (default: current directory)")
     
-    # Parse command line arguments
-    include_tests = "--keep-tests" not in sys.argv
-    include_docs = "--clean-docs" in sys.argv
+    args = parser.parse_args()
     
-    print("Options:")
-    print(f"  Include test files: {include_tests}")
-    print(f"  Include documentation: {include_docs}")
-    print()
+    cleanup = ProjectCleanup(args.project_root)
+    success = cleanup.run_cleanup(
+        archive_days=args.archive_days,
+        remove_duplicates=not args.no_duplicates
+    )
     
-    # Confirm before proceeding
-    response = input("Proceed with cleanup? (y/N): ").strip().lower()
-    if response not in ['y', 'yes']:
-        print("❌ Cleanup cancelled.")
-        return
-    
-    # Run cleanup
-    cleanup.run_cleanup(include_tests=include_tests, include_docs=include_docs)
+    if success:
+        print("\n🎉 Project cleanup completed successfully!")
+    else:
+        print("\n❌ Project cleanup failed. Check the errors above.")
 
 if __name__ == "__main__":
     main()

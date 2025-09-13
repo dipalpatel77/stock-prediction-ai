@@ -142,12 +142,19 @@ cython_debug/
 # VS Code
 .vscode/
 
-# Stock prediction specific
-# Model files (can be large)
+# ========================================
+# AI STOCK PREDICTOR PROJECT SPECIFIC
+# ========================================
+
+# Model files (can be large and are generated)
 models/*.pkl
 models/*.h5
 models/*.joblib
 models/*.model
+models/*.pkl.gz
+models/*.h5.gz
+models/*.joblib.gz
+models/*.model.gz
 
 # Data files (can be large and contain sensitive info)
 data/*.csv
@@ -155,11 +162,31 @@ data/*.json
 data/*.parquet
 data/*.h5
 data/*.pkl
+data/*.xlsx
+data/*.xls
 
-# Logs
+# Organized data structure - ignore generated data
+data/by_ticker/*/
+data/cache/
+data/economic_cache/
+data/angel_data/
+data/phase1/
+data/phase2/
+data/phase3/
+data/fundamental/
+data/institutional/
+data/global/
+data/comparison_reports/
+
+# Archive directory (contains old data)
+archive/
+
+# Logs and debugging
 logs/
 *.log
 debug_output.txt
+error_log.txt
+analysis_log.txt
 
 # CatBoost specific
 catboost_info/
@@ -184,11 +211,14 @@ Thumbs.db
 *.bak
 *.backup
 *.old
+backup_before_cleanup/
 
 # Configuration files with sensitive data
 config_local.py
 secrets.py
 credentials.py
+*_local.py
+*_secrets.py
 
 # API keys and tokens (additional safety)
 *api_key*
@@ -196,6 +226,8 @@ credentials.py
 *secret*
 *password*
 *credential*
+*_key*
+*_token*
 
 # Large data files
 *.zip
@@ -203,7 +235,7 @@ credentials.py
 *.rar
 *.7z
 
-# Jupyter notebook outputs
+# Jupyter notebook outputs (keep source, ignore outputs)
 *.ipynb
 
 # Training artifacts
@@ -211,6 +243,7 @@ checkpoints/
 runs/
 wandb/
 mlruns/
+tensorboard_logs/
 
 # Database files
 *.db
@@ -220,3 +253,64 @@ mlruns/
 # Cache directories
 .cache/
 cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# Reports and outputs (generated files)
+reports/
+comprehensive_reports/
+output/
+results/
+
+# Cleanup and organization artifacts
+cleanup_report.md
+CLEANUP_REPORT.md
+reorganize_files.py
+update_imports.py
+cleanup_project.py
+test_imports.py
+
+# Angel One API specific
+angel_data/
+angel_cache/
+angel_exports/
+
+# Economic data cache
+economic_cache/
+fred_cache/
+world_bank_cache/
+
+# Model training artifacts
+training_logs/
+model_artifacts/
+experiment_logs/
+
+# Validation and testing outputs
+validation_results/
+test_results/
+performance_logs/
+
+# IDE and editor specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Windows specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux specific
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
