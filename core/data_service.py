@@ -19,6 +19,9 @@ import time
 
 warnings.filterwarnings('ignore')
 
+# Import incremental data service
+from .incremental_data_service import IncrementalDataService
+
 class DataService:
     """Shared data loading and preprocessing service."""
     
@@ -28,6 +31,9 @@ class DataService:
         self.data_cache = {}
         self.cache_lock = threading.Lock()
         self.current_prices = {}
+        
+        # Initialize incremental data service
+        self.incremental_service = IncrementalDataService()
         
         # Data validation settings
         self.min_data_points = 100
@@ -47,6 +53,45 @@ class DataService:
                 'comprehensive': '2y'
             }
         
+    def load_stock_data_incremental(self, ticker: str, period: str = "2y", 
+                                   interval: str = '1d', force_refresh: bool = False) -> pd.DataFrame:
+        """
+        Load stock data using incremental updates for better efficiency.
+        
+        Args:
+            ticker: Stock ticker symbol
+            period: Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y)
+            interval: Data interval
+            force_refresh: Force full data refresh
+            
+        Returns:
+            DataFrame with stock data
+        """
+        try:
+            print(f"🔄 Loading incremental data for {ticker}...")
+            
+            # Use incremental service
+            data = self.incremental_service.get_incremental_data(
+                ticker=ticker,
+                period=period,
+                interval=interval,
+                force_refresh=force_refresh
+            )
+            
+            if data is not None and not data.empty:
+                # Preprocess the data
+                processed_data = self._preprocess_raw_data(data)
+                print(f"✅ Incremental data loaded for {ticker}: {len(processed_data)} records")
+                return processed_data
+            else:
+                raise ValueError(f"No data available for {ticker}")
+                
+        except Exception as e:
+            print(f"❌ Incremental data loading failed for {ticker}: {e}")
+            # Fallback to original method
+            print(f"🔄 Falling back to standard data loading for {ticker}...")
+            return self.load_stock_data(ticker, period, interval, force_refresh)
+    
     def load_stock_data(self, ticker: str, period: str = None, 
                         interval: str = '1d', force_refresh: bool = False,
                         start_date: str = None, end_date: str = None) -> pd.DataFrame:
@@ -605,7 +650,7 @@ class DataService:
                     break
             
             # Try to use the Indian Stock Mapper
-            from data_downloaders.indian_stock_mapper import get_symbol_info, load_angel_master
+            from core.indian_stock_mapper import get_symbol_info, load_angel_master
             
             # Load Angel master data (uses smart caching)
             angel_master = load_angel_master()
@@ -706,7 +751,7 @@ class DataService:
         """Download data from Angel One API using Indian Stock Mapper for symbol lookup."""
         try:
             from .angel_one_data_downloader import AngelOneDataDownloader
-            from data_downloaders.indian_stock_mapper import get_symbol_info, load_angel_master
+            from core.indian_stock_mapper import get_symbol_info, load_angel_master
             
             # Initialize Angel One downloader
             angel_downloader = AngelOneDataDownloader()
@@ -842,7 +887,7 @@ class DataService:
         """Download data from Angel One API for custom date range using Indian Stock Mapper."""
         try:
             from .angel_one_data_downloader import AngelOneDataDownloader
-            from data_downloaders.indian_stock_mapper import get_symbol_info, load_angel_master
+            from core.indian_stock_mapper import get_symbol_info, load_angel_master
             
             # Initialize Angel One downloader
             angel_downloader = AngelOneDataDownloader()

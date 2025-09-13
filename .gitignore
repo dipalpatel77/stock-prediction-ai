@@ -126,7 +126,11 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
+data/phase1/*  
+data/phase2/*
+data/phase3/*
+data/fundamental/*
+data/institutional/*
 # Pyre type checker
 .pyre/
 
@@ -220,3 +224,17 @@ mlruns/
 # Cache directories
 .cache/
 cache/
+
+# Cleanup-specific ignores
+backup_before_cleanup/
+*.pyc
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/

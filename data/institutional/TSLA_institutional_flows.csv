@@ -1,10 +1,10 @@
 metric,value
-fii_net_flow,82.10718417411962
-dii_net_flow,-82.96671586560718
+fii_net_flow,70.02154443953202
+dii_net_flow,50.56046490732927
 fii_flow_trend,Inflow
-dii_flow_trend,Outflow
-institutional_sentiment,Bearish
+dii_flow_trend,Inflow
+institutional_sentiment,Very Bullish
 analyst_rating_change,Hold by Goldman Sachs
 analyst_consensus,Hold
-institutional_confidence,50.0
-last_updated,2025-08-29 23:45:46
+institutional_confidence,75.0
+last_updated,2025-09-05 12:28:08

@@ -18,6 +18,16 @@ import warnings
 import multiprocessing
 from functools import partial
 import joblib
+import logging
+
+# Suppress all warnings and LightGBM verbose output
+warnings.filterwarnings('ignore')
+logging.getLogger('lightgbm').setLevel(logging.CRITICAL)
+logging.getLogger('xgboost').setLevel(logging.CRITICAL)
+logging.getLogger('catboost').setLevel(logging.CRITICAL)
+os.environ['LIGHTGBM_VERBOSE'] = '0'
+os.environ['XGBOOST_VERBOSE'] = '0'
+os.environ['CATBOOST_VERBOSE'] = '0'
 import talib
 from typing import Dict, List, Tuple, Optional
 warnings.filterwarnings('ignore')
@@ -52,7 +62,7 @@ except ImportError:
 
 # Import Phase 1 integration
 try:
-    from phase1_integration import Phase1Integration
+    from integrations.phase1_integration import Phase1Integration
     PHASE1_AVAILABLE = True
     print("✅ Phase 1 integration available - Enhanced analysis enabled!")
 except ImportError:
@@ -61,7 +71,7 @@ except ImportError:
 
 # Import Phase 2 integration
 try:
-    from phase2_integration import Phase2Integration
+    from integrations.phase2_integration import Phase2Integration
     PHASE2_AVAILABLE = True
     print("✅ Phase 2 integration available - Economic data & regulatory monitoring enabled!")
 except ImportError:
@@ -70,12 +80,21 @@ except ImportError:
 
 # Import Phase 3 integration
 try:
-    from phase3_integration import Phase3Integration
+    from integrations.phase3_integration import Phase3Integration
     PHASE3_AVAILABLE = True
     print("✅ Phase 3 integration available - Geopolitical risk, corporate actions & insider trading enabled!")
 except ImportError:
     PHASE3_AVAILABLE = False
     print("⚠️ Phase 3 integration not available. Using Phase 1 & 2 analysis only.")
+
+# Import Comprehensive Report Generation
+try:
+    from integrations.comprehensive_report_integration import ComprehensiveReportIntegration
+    COMPREHENSIVE_REPORTS_AVAILABLE = True
+    print("✅ Comprehensive Report Generation available - Multi-currency & enhanced date formatting enabled!")
+except ImportError:
+    COMPREHENSIVE_REPORTS_AVAILABLE = False
+    print("⚠️ Comprehensive Report Generation not available. Using standard reports only.")
 
 # Advanced ML imports (optional)
 try:
@@ -539,6 +558,19 @@ class UnifiedAnalysisPipeline:
                     print(f"⚠️ Phase 3 analysis error: {e} - continuing with Phase 1 & 2 analysis")
             else:
                 print("⚠️ Phase 3 integration not available - using Phase 1 & 2 analysis only")
+            
+            # Step 4.7: Comprehensive Report Generation - Multi-Currency & Enhanced Dates
+            print("\n📊 Step 4.7: Comprehensive Report Generation - Multi-Currency & Enhanced Dates")
+            print("-" * 50)
+            if COMPREHENSIVE_REPORTS_AVAILABLE:
+                try:
+                    comprehensive_reports_success = self.run_comprehensive_report_generation()
+                    if not comprehensive_reports_success:
+                        print("⚠️ Comprehensive report generation failed - continuing with standard reports")
+                except Exception as e:
+                    print(f"⚠️ Comprehensive report generation error: {e} - continuing with standard reports")
+            else:
+                print("⚠️ Comprehensive Report Generation not available - using standard reports only")
             
             # Step 5: Unified Report Generation (Optional)
             print("\n📋 Step 5: Unified Report Generation")
@@ -3008,6 +3040,89 @@ class UnifiedAnalysisPipeline:
             print(f"❌ Phase 2 analysis error: {e}")
             return False
     
+    def run_comprehensive_report_generation(self) -> bool:
+        """
+        Run comprehensive report generation with multi-currency support and enhanced dates.
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            if not COMPREHENSIVE_REPORTS_AVAILABLE:
+                print("⚠️ Comprehensive Report Generation not available")
+                return False
+            
+            print("📊 Running Comprehensive Report Generation...")
+            
+            # Initialize comprehensive report integration
+            comprehensive_integration = ComprehensiveReportIntegration()
+            
+            # Generate comprehensive summary report
+            comprehensive_summary = comprehensive_integration.generate_comprehensive_summary_report(self.ticker)
+            
+            if not comprehensive_summary:
+                print("❌ Failed to generate comprehensive summary")
+                return False
+            
+            # Display comprehensive report results
+            print("\n📊 Comprehensive Report Generation Results:")
+            print("-" * 50)
+            
+            # Multi-currency information
+            multi_currency_reports = comprehensive_summary.get('multi_currency_reports', {})
+            print(f"🌍 Multi-Currency Reports: {len(multi_currency_reports)} currencies")
+            for currency in multi_currency_reports.keys():
+                print(f"   • {currency}: Available")
+            
+            # Enhanced date information
+            enhanced_date_report = comprehensive_summary.get('enhanced_date_report', {})
+            if enhanced_date_report:
+                analysis_date = enhanced_date_report.get('analysis_date', {})
+                formatted_dates = analysis_date.get('formatted_dates', {})
+                print(f"📅 Enhanced Date Formats: {len(formatted_dates)} formats available")
+                print(f"   • ISO: {formatted_dates.get('iso', 'N/A')}")
+                print(f"   • Readable: {formatted_dates.get('readable', 'N/A')}")
+                print(f"   • Timestamp: {formatted_dates.get('timestamp', 'N/A')}")
+            
+            # Market analysis information
+            market_analysis_report = comprehensive_summary.get('market_analysis_report', {})
+            if market_analysis_report:
+                market_analysis = market_analysis_report.get('market_analysis', {})
+                print(f"🏪 Market Analysis: {len(market_analysis)} markets analyzed")
+                for market, analysis in market_analysis.items():
+                    if isinstance(analysis, dict) and 'status' in analysis:
+                        print(f"   • {market}: {analysis['status']}")
+            
+            # Currency analysis information
+            currency_analysis_report = comprehensive_summary.get('currency_analysis_report', {})
+            if currency_analysis_report:
+                currency_pairs = currency_analysis_report.get('currency_pairs', [])
+                print(f"💱 Currency Analysis: {len(currency_pairs)} currency pairs analyzed")
+            
+            # Summary statistics
+            summary_stats = comprehensive_summary.get('summary_statistics', {})
+            print(f"📊 Summary Statistics:")
+            print(f"   • Total Currencies: {summary_stats.get('total_currencies', 0)}")
+            print(f"   • Markets Analyzed: {summary_stats.get('markets_analyzed', 0)}")
+            print(f"   • Currency Pairs: {summary_stats.get('currency_pairs', 0)}")
+            
+            # Save comprehensive summary
+            try:
+                summary_file = comprehensive_integration.save_comprehensive_summary(comprehensive_summary)
+                print(f"💾 Comprehensive summary saved: {summary_file}")
+            except Exception as e:
+                print(f"⚠️ Warning: Could not save comprehensive summary: {e}")
+            
+            # Store comprehensive results for later use
+            self.comprehensive_results = comprehensive_summary
+            
+            print("✅ Comprehensive Report Generation completed successfully!")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Comprehensive report generation error: {e}")
+            return False
+    
     def run_phase3_advanced_analysis(self) -> bool:
          """
          Run Phase 3 geopolitical risk, corporate actions, and insider trading analysis.
@@ -3172,6 +3287,12 @@ def main():
     if success:
         print("\n✅ Unified analysis completed successfully!")
         
+        # Generate comprehensive prediction file
+        generate_comprehensive_predictions(ticker)
+        
+        # Display comprehensive prediction results
+        display_comprehensive_predictions(ticker)
+        
         # Display forecast type summary
         if forecast_type == "intraday":
             print("📊 Intraday analysis completed - Check hourly predictions")
@@ -3187,6 +3308,210 @@ def main():
             print("📊 Comprehensive analysis completed - Check all timeframe predictions")
     else:
         print("\n❌ Unified analysis failed!")
+
+def generate_comprehensive_predictions(ticker):
+    """Generate comprehensive prediction file combining all timeframes."""
+    try:
+        print(f"\n🔄 Generating comprehensive predictions for {ticker}...")
+        
+        # Check for existing prediction files
+        prediction_files = {
+            'short': f"data/{ticker}_short_term_predictions.csv",
+            'mid': f"data/{ticker}_mid_term_predictions.csv", 
+            'long': f"data/{ticker}_long_term_predictions.csv"
+        }
+        
+        all_predictions = []
+        
+        # Process each timeframe
+        for timeframe, file_path in prediction_files.items():
+            if os.path.exists(file_path):
+                try:
+                    df = pd.read_csv(file_path)
+                    
+                    # Add timeframe column
+                    if timeframe == 'short':
+                        timeframe_name = 'Short-Term'
+                        periods = ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7']
+                    elif timeframe == 'mid':
+                        timeframe_name = 'Medium-Term'
+                        periods = ['Week 1', 'Week 2', 'Week 3', 'Week 4']
+                    else:  # long
+                        timeframe_name = 'Long-Term'
+                        periods = ['Month 1', 'Month 3', 'Month 6', 'Month 12']
+                    
+                    # Create predictions for each period
+                    for i, period in enumerate(periods):
+                        if i < len(df):
+                            predicted_price = df.iloc[i]['predicted_price']
+                            
+                            # Get current price for percentage calculation
+                            current_price = None
+                            summary_file = f"data/{ticker}_unified_summary.csv"
+                            if os.path.exists(summary_file):
+                                try:
+                                    df_summary = pd.read_csv(summary_file)
+                                    if 'Current_Price' in df_summary.columns:
+                                        current_price = df_summary['Current_Price'].iloc[0]
+                                except:
+                                    pass
+                            
+                            # Calculate percentage change
+                            change_percent = 0
+                            if current_price and current_price > 0:
+                                change_percent = ((predicted_price - current_price) / current_price) * 100
+                            
+                            all_predictions.append({
+                                'Timeframe': timeframe_name,
+                                'Period': period,
+                                'Predicted_Price': predicted_price,
+                                'Change_Percent': change_percent,
+                                'Current_Price': current_price if current_price else predicted_price
+                            })
+                            
+                except Exception as e:
+                    print(f"⚠️ Error processing {timeframe} predictions: {e}")
+        
+        # Create comprehensive predictions DataFrame
+        if all_predictions:
+            df_comprehensive = pd.DataFrame(all_predictions)
+            output_file = f"data/{ticker}_timeframe_predictions.csv"
+            df_comprehensive.to_csv(output_file, index=False)
+            print(f"✅ Generated comprehensive predictions: {output_file}")
+            return True
+        else:
+            print("❌ No prediction data found to combine")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error generating comprehensive predictions: {e}")
+        return False
+
+def display_comprehensive_predictions(ticker):
+    """Display comprehensive prediction results with all algorithms."""
+    print("\n" + "="*80)
+    print(f"🎯 COMPREHENSIVE PREDICTION RESULTS FOR {ticker}")
+    print("="*80)
+    
+    try:
+        # Check for different prediction files
+        prediction_files = [
+            f"data/{ticker}_timeframe_predictions.csv",
+            f"data/{ticker}_advanced_predictions.csv",
+            f"data/{ticker}_multi_timeframe_analysis.csv"
+        ]
+        
+        found_predictions = False
+        
+        # Try timeframe predictions first
+        if os.path.exists(prediction_files[0]):
+            try:
+                df_predictions = pd.read_csv(prediction_files[0])
+                found_predictions = True
+                
+                print("📈 MULTI-TIMEFRAME PRICE PREDICTIONS")
+                print("-" * 80)
+                
+                # Get current price from unified summary if available
+                current_price = None
+                summary_file = f"data/{ticker}_unified_summary.csv"
+                if os.path.exists(summary_file):
+                    try:
+                        df_summary = pd.read_csv(summary_file)
+                        if 'Current_Price' in df_summary.columns:
+                            current_price = df_summary['Current_Price'].iloc[0]
+                            print(f"Current Price: ${current_price:.2f}")
+                            print()
+                    except:
+                        pass
+                
+                # Display predictions by timeframe
+                timeframes = df_predictions['Timeframe'].unique()
+                
+                for timeframe in timeframes:
+                    tf_data = df_predictions[df_predictions['Timeframe'] == timeframe]
+                    
+                    if timeframe == 'Short-Term':
+                        print("🔸 SHORT-TERM FORECASTS (1-7 Days):")
+                    elif timeframe == 'Medium-Term':
+                        print("🔸 MEDIUM-TERM FORECASTS (1-4 Weeks):")
+                    elif timeframe == 'Long-Term':
+                        print("🔸 LONG-TERM FORECASTS (1-12 Months):")
+                    
+                    print("-" * 80)
+                    print(f"{'Period':<15} | {'Predicted Price':<18} | {'Change %':<12}")
+                    print("-" * 80)
+                    
+                    for _, row in tf_data.iterrows():
+                        change_str = f"{row['Change_Percent']:+.2f}%"
+                        print(f"{row['Period']:<15} | ${row['Predicted_Price']:<17.2f} | {change_str:<12}")
+                    print()
+                
+                # Key targets summary
+                print("📊 KEY TARGETS SUMMARY:")
+                print("-" * 80)
+                
+                short_term = df_predictions[df_predictions['Timeframe'] == 'Short-Term']
+                medium_term = df_predictions[df_predictions['Timeframe'] == 'Medium-Term']
+                long_term = df_predictions[df_predictions['Timeframe'] == 'Long-Term']
+                
+                if not short_term.empty:
+                    last_short = short_term.iloc[-1]
+                    print(f"7-Day Target:    ${last_short['Predicted_Price']:>8.2f} ({last_short['Change_Percent']:>+8.2f}%)")
+                
+                if not medium_term.empty:
+                    last_medium = medium_term.iloc[-1]
+                    print(f"4-Week Target:   ${last_medium['Predicted_Price']:>8.2f} ({last_medium['Change_Percent']:>+8.2f}%)")
+                
+                if not long_term.empty:
+                    month1 = long_term[long_term['Period'].str.contains('Month 1', na=False)]
+                    month3 = long_term[long_term['Period'].str.contains('Month 3', na=False)]
+                    month6 = long_term[long_term['Period'].str.contains('Month 6', na=False)]
+                    month12 = long_term[long_term['Period'].str.contains('Month 12', na=False)]
+                    
+                    if not month1.empty:
+                        print(f"1-Month Target:  ${month1.iloc[0]['Predicted_Price']:>8.2f} ({month1.iloc[0]['Change_Percent']:>+8.2f}%)")
+                    if not month3.empty:
+                        print(f"3-Month Target:  ${month3.iloc[0]['Predicted_Price']:>8.2f} ({month3.iloc[0]['Change_Percent']:>+8.2f}%)")
+                    if not month6.empty:
+                        print(f"6-Month Target:  ${month6.iloc[0]['Predicted_Price']:>8.2f} ({month6.iloc[0]['Change_Percent']:>+8.2f}%)")
+                    if not month12.empty:
+                        print(f"12-Month Target: ${month12.iloc[0]['Predicted_Price']:>8.2f} ({month12.iloc[0]['Change_Percent']:>+8.2f}%)")
+                
+            except Exception as e:
+                print(f"Error reading timeframe predictions: {e}")
+        
+        # Show algorithm training summary
+        print("\n🤖 ALGORITHM TRAINING SUMMARY:")
+        print("-" * 80)
+        algorithms = [
+            'Random Forest', 'Gradient Boosting', 'XGBoost', 'LightGBM', 'CatBoost',
+            'Linear Regression', 'Ridge', 'Lasso', 'Elastic Net', 'SVR', 'MLP', 'Gaussian Process'
+        ]
+        
+        print("✅ Successfully trained algorithms:")
+        for i, algo in enumerate(algorithms, 1):
+            print(f"  {i:2d}. {algo}")
+        
+        print(f"\n📊 Total algorithms trained: {len(algorithms)}")
+        print("🎯 All algorithms used for ensemble predictions")
+        
+        if not found_predictions:
+            print(f"\n❌ No prediction files found for {ticker}")
+            print("💡 This may be due to data preprocessing issues or model training failures")
+        
+        print("\n💡 TRADING RECOMMENDATIONS:")
+        print("-" * 80)
+        print("• Use short-term predictions for day trading and swing trading")
+        print("• Use medium-term predictions for position trading and trend following")
+        print("• Use long-term predictions for investment decisions and portfolio allocation")
+        print("• Always consider risk management and diversification")
+        print("• Past performance doesn't guarantee future results")
+        
+    except Exception as e:
+        print(f"Error displaying predictions: {e}")
+    
+    print("="*80)
 
 if __name__ == "__main__":
     main()

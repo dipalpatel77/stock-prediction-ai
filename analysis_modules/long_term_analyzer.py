@@ -25,17 +25,23 @@ class LongTermAnalyzer:
         print("🔄 Starting long-term data processing...")
         
         def download_long_term_data():
-            """Download extensive historical data for long-term analysis."""
+            """Download extensive historical data for long-term analysis using incremental updates."""
             try:
-                import yfinance as yf
+                from core.data_service import DataService
                 
-                # Download extensive historical data (last 5 years with daily intervals)
-                stock = yf.Ticker(self.ticker)
-                df = stock.history(period="5y", interval="1d")
+                # Use incremental data service for efficiency
+                data_service = DataService()
+                df = data_service.load_stock_data_incremental(
+                    ticker=self.ticker,
+                    period="5y",
+                    interval="1d",
+                    force_refresh=False
+                )
                 
                 if not df.empty:
+                    # Save processed data
                     df.to_csv(f"{self.data_dir}/{self.ticker}_long_term_data.csv")
-                    return True, f"Downloaded {len(df)} long-term records"
+                    return True, f"Downloaded {len(df)} long-term records (incremental)"
                 else:
                     return False, "No long-term data available"
             except Exception as e:
@@ -44,7 +50,7 @@ class LongTermAnalyzer:
         def add_long_term_indicators():
             """Add technical indicators optimized for long-term."""
             try:
-                from partC_strategy.optimized_technical_indicators import OptimizedTechnicalIndicators
+                from core.strategy_service import StrategyService
                 
                 data_file = f"{self.data_dir}/{self.ticker}_long_term_data.csv"
                 if not os.path.exists(data_file):
@@ -53,8 +59,15 @@ class LongTermAnalyzer:
                 df = pd.read_csv(data_file, index_col=0, parse_dates=True)
                 
                 # Add technical indicators optimized for long-term
-                analyzer = OptimizedTechnicalIndicators()
-                df_with_indicators = analyzer.add_all_indicators(df)
+                strategy_service = StrategyService()
+                technical_data = strategy_service.get_technical_indicators(self.ticker)
+                
+                # Add technical indicators to dataframe
+                for indicator, value in technical_data.items():
+                    if isinstance(value, (int, float)):
+                        df[f'technical_{indicator}'] = value
+                
+                df_with_indicators = df
                 
                 df_with_indicators.to_csv(f"{self.data_dir}/{self.ticker}_long_term_enhanced.csv")
                 return True, f"Added indicators to {len(df_with_indicators)} records"
@@ -91,21 +104,76 @@ class LongTermAnalyzer:
         def load_or_train_model():
             """Load existing model or train new one."""
             try:
-                model_path = f"{self.models_dir}/{self.ticker}_long_term_lstm.h5"
+                model_path = f"{self.models_dir}/{self.ticker}_long_term_random_forest.pkl"
                 
                 if os.path.exists(model_path):
-                    from tensorflow.keras.models import load_model
-                    model = load_model(model_path)
+                    import joblib
+                    model = joblib.load(model_path)
                     return True, "Loaded existing long-term model"
                 else:
                     # Train new long-term model
-                    from partB_model.enhanced_training import EnhancedStockPredictor
+                    from core.model_service import ModelService
                     
-                    predictor = EnhancedStockPredictor(self.ticker)
-                    model = predictor.train_long_term_model()
+                    # Load data for training
+                    data_file = f"{self.data_dir}/{self.ticker}_long_term_data.csv"
+                    if not os.path.exists(data_file):
+                        return False, "No long-term data file found for training"
                     
-                    # Save model
-                    model.save(model_path)
+                    # Load data without setting index to avoid Date column issues
+                    df = pd.read_csv(data_file)
+                    
+                    # Remove the Unnamed: 0 column if it exists
+                    if 'Unnamed: 0' in df.columns:
+                        df = df.drop('Unnamed: 0', axis=1)
+                    
+                    # Convert Date column to datetime and set as index
+                    if 'Date' in df.columns:
+                        df['Date'] = pd.to_datetime(df['Date'])
+                        df = df.set_index('Date')
+                    
+                    # Remove any non-numeric columns that might cause issues
+                    numeric_columns = df.select_dtypes(include=[np.number]).columns
+                    df = df[numeric_columns]
+                    
+                    # Handle NaN values by filling with forward fill and then backward fill
+                    df = df.fillna(method='ffill').fillna(method='bfill')
+                    
+                    # Drop any remaining rows with NaN values
+                    df = df.dropna()
+                    
+                    model_service = ModelService()
+                    
+                    # Prepare features and target
+                    if 'Close' in df.columns:
+                        X = df.drop(['Close'], axis=1)
+                        y = df['Close']
+                        
+                        # Train multiple models using all available algorithms
+                        algorithms = [
+                            'random_forest', 'gradient_boosting', 'xgboost', 'lightgbm', 'catboost',
+                            'linear_regression', 'ridge', 'lasso', 'elastic_net', 'svr', 'mlp', 'gaussian_process'
+                        ]
+                        
+                        trained_models = {}
+                        for algo in algorithms:
+                            try:
+                                result = model_service.train_model(algo, X, y, 'standard')
+                                trained_models[algo] = result['model']
+                                print(f"✅ Trained {algo} model for long-term")
+                            except Exception as e:
+                                print(f"⚠️ Failed to train {algo}: {e}")
+                                continue
+                        
+                        # Use the best performing model (random_forest as primary)
+                        model = trained_models.get('random_forest')
+                        if not model and trained_models:
+                            model = list(trained_models.values())[0]
+                    else:
+                        return False, "No Close price column found for training"
+                    
+                    # Save model using joblib
+                    import joblib
+                    joblib.dump(model, model_path)
                     return True, "Trained new long-term model"
             except Exception as e:
                 return False, f"Model error: {e}"
@@ -122,21 +190,35 @@ class LongTermAnalyzer:
                     scaler = joblib.load(scaler_path)
                     return True, "Loaded existing scaler"
                 else:
-                    # Create new scaler
-                    data_file = f"{self.data_dir}/{self.ticker}_long_term_enhanced.csv"
+                    # Create new scaler using regular data file
+                    data_file = f"{self.data_dir}/{self.ticker}_long_term_data.csv"
                     if os.path.exists(data_file):
-                        df = pd.read_csv(data_file, index_col=0, parse_dates=True)
+                        df = pd.read_csv(data_file)
                         
-                        # Prepare features for scaling
-                        feature_cols = [col for col in df.columns if col not in ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
-                        scaler = MinMaxScaler()
-                        scaler.fit(df[feature_cols])
+                        # Remove the Unnamed: 0 column if it exists
+                        if 'Unnamed: 0' in df.columns:
+                            df = df.drop('Unnamed: 0', axis=1)
                         
-                        # Save scaler
-                        joblib.dump(scaler, scaler_path)
-                        return True, "Created new scaler"
+                        # Remove any non-numeric columns that might cause issues
+                        numeric_columns = df.select_dtypes(include=[np.number]).columns
+                        df = df[numeric_columns]
+                        
+                        # Handle NaN values
+                        df = df.fillna(method='ffill').fillna(method='bfill').dropna()
+                        
+                        # Prepare features for scaling (exclude Close price)
+                        feature_cols = [col for col in df.columns if col != 'Close']
+                        if feature_cols:
+                            scaler = MinMaxScaler()
+                            scaler.fit(df[feature_cols])
+                            
+                            # Save scaler
+                            joblib.dump(scaler, scaler_path)
+                            return True, "Created new scaler"
+                        else:
+                            return False, "No feature columns for scaler"
                     else:
-                        return False, "No enhanced data for scaler"
+                        return False, "No data file for scaler"
             except Exception as e:
                 return False, f"Scaler error: {e}"
         
@@ -170,10 +252,10 @@ class LongTermAnalyzer:
         def run_long_term_sentiment():
             """Run sentiment analysis for long-term."""
             try:
-                from partC_strategy.optimized_sentiment_analyzer import OptimizedSentimentAnalyzer
+                from core.strategy_service import StrategyService
                 
-                analyzer = OptimizedSentimentAnalyzer()
-                sentiment_df = analyzer.analyze_stock_sentiment(self.ticker, days_back=90)  # Quarterly sentiment
+                strategy_service = StrategyService()
+                sentiment_df = strategy_service.analyze_sentiment(self.ticker, days_back=90)  # Quarterly sentiment
                 
                 if not sentiment_df.empty:
                     sentiment_df.to_csv(f"{self.data_dir}/{self.ticker}_long_term_sentiment.csv", index=False)
@@ -186,10 +268,10 @@ class LongTermAnalyzer:
         def run_long_term_market_factors():
             """Run market factors for long-term."""
             try:
-                from partC_strategy.enhanced_market_factors import EnhancedMarketFactors
+                from core.strategy_service import StrategyService
                 
-                analyzer = EnhancedMarketFactors()
-                market_data = analyzer.get_market_factors()
+                strategy_service = StrategyService()
+                market_data = strategy_service.get_market_factors(self.ticker)
                 
                 if market_data:
                     market_df = pd.DataFrame([market_data])
@@ -230,8 +312,8 @@ class LongTermAnalyzer:
         def run_long_term_signals():
             """Generate long-term trading signals."""
             try:
-                from partC_strategy.optimized_trading_strategy import OptimizedTradingStrategy
-                from partC_strategy.optimized_sentiment_analyzer import OptimizedSentimentAnalyzer
+                from core.strategy_service import StrategyService
+                from core.strategy_service import StrategyService
                 
                 # Load long-term data
                 data_file = f"{self.data_dir}/{self.ticker}_long_term_enhanced.csv"
@@ -256,38 +338,62 @@ class LongTermAnalyzer:
         def run_long_term_predictions():
             """Generate long-term price predictions."""
             try:
-                from tensorflow.keras.models import load_model
                 import joblib
                 
-                # Load model and scaler
-                model_path = f"{self.models_dir}/{self.ticker}_long_term_lstm.h5"
+                # Load scikit-learn model and scaler
+                model_path = f"{self.models_dir}/{self.ticker}_long_term_random_forest.pkl"
                 scaler_path = f"{self.models_dir}/{self.ticker}_long_term_scaler.pkl"
                 
                 if not os.path.exists(model_path) or not os.path.exists(scaler_path):
                     return False, "Model or scaler not found"
                 
-                model = load_model(model_path)
+                model = joblib.load(model_path)
                 scaler = joblib.load(scaler_path)
                 
                 # Load data
-                data_file = f"{self.data_dir}/{self.ticker}_long_term_enhanced.csv"
-                df = pd.read_csv(data_file, index_col=0, parse_dates=True)
+                data_file = f"{self.data_dir}/{self.ticker}_long_term_data.csv"
+                if not os.path.exists(data_file):
+                    return False, "Data file not found"
                 
-                # Prepare features
-                feature_cols = [col for col in df.columns if col not in ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
-                features = df[feature_cols].values
+                df = pd.read_csv(data_file)
+                
+                # Remove the Unnamed: 0 column if it exists
+                if 'Unnamed: 0' in df.columns:
+                    df = df.drop('Unnamed: 0', axis=1)
+                
+                # Remove any non-numeric columns that might cause issues
+                numeric_columns = df.select_dtypes(include=[np.number]).columns
+                df = df[numeric_columns]
+                
+                # Handle NaN values by filling with forward fill and then backward fill
+                df = df.fillna(method='ffill').fillna(method='bfill')
+                
+                # Drop any remaining rows with NaN values
+                df = df.dropna()
+                
+                # Prepare features (exclude target column)
+                feature_cols = [col for col in df.columns if col != 'Close']
+                if not feature_cols:
+                    return False, "No feature columns found"
+                
+                # Use last row for prediction
+                last_features = df[feature_cols].iloc[-1:].values
+                
+                # Handle NaN values
+                if np.isnan(last_features).any():
+                    # Fill NaN with median values
+                    for i, col in enumerate(feature_cols):
+                        if np.isnan(last_features[0, i]):
+                            last_features[0, i] = df[col].median()
                 
                 # Scale features
-                features_scaled = scaler.transform(features)
+                features_scaled = scaler.transform(last_features)
                 
                 # Make predictions (next N months)
                 predictions = []
                 for i in range(months_ahead * 21):  # ~21 trading days per month
-                    if len(features_scaled) > 0:
-                        # Use last sequence for prediction
-                        last_sequence = features_scaled[-1:].reshape(1, 1, -1)
-                        pred = model.predict(last_sequence, verbose=0)
-                        predictions.append(pred[0][0])
+                    pred = model.predict(features_scaled)[0]
+                    predictions.append(pred)
                 
                 # Create predictions DataFrame
                 pred_df = pd.DataFrame({
