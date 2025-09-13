@@ -11,7 +11,7 @@ class TestPhaseIntegrations(unittest.TestCase):
     def test_phase1_import(self):
         """Test phase 1 integration import"""
         try:
-            from integrations.phase1_integration import Phase1Integration
+            from src.integrations.phase1_integration import Phase1Integration
             self.assertTrue(True)
         except ImportError:
             self.fail("Phase 1 integration import failed")
@@ -19,7 +19,7 @@ class TestPhaseIntegrations(unittest.TestCase):
     def test_phase2_import(self):
         """Test phase 2 integration import"""
         try:
-            from integrations.phase2_integration import Phase2Integration
+            from src.integrations.phase2_integration import Phase2Integration
             self.assertTrue(True)
         except ImportError:
             self.fail("Phase 2 integration import failed")
@@ -27,7 +27,7 @@ class TestPhaseIntegrations(unittest.TestCase):
     def test_phase3_import(self):
         """Test phase 3 integration import"""
         try:
-            from integrations.phase3_integration import Phase3Integration
+            from src.integrations.phase3_integration import Phase3Integration
             self.assertTrue(True)
         except ImportError:
             self.fail("Phase 3 integration import failed")

@@ -4,9 +4,9 @@ Test core services functionality
 """
 
 import unittest
-from core.data_service import DataService
-from core.model_service import ModelService
-from core.strategy_service import StrategyService
+from src.core.data_service import DataService
+from src.core.model_service import ModelService
+from src.core.strategy_service import StrategyService
 
 class TestCoreServices(unittest.TestCase):
     """Test core services"""
