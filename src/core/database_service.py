@@ -752,11 +752,33 @@ class DatabaseService:
             df['date'] = pd.to_datetime(df['date'])
             df.set_index('date', inplace=True)
             
+            # Convert decimal.Decimal columns to float
+            df = self._convert_decimal_columns(df)
+            
             # Remove database-specific columns
             columns_to_drop = ['id', 'created_at', 'updated_at']
             df = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
             
+        self.logger.info(f"Retrieved {len(df)} records for {ticker} from MySQL")
         return df
+    
+    def _convert_decimal_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Convert decimal.Decimal columns to float for compatibility."""
+        try:
+            from decimal import Decimal
+            
+            for column in df.columns:
+                if df[column].dtype == 'object':
+                    # Check if column contains Decimal objects
+                    sample_values = df[column].dropna().head(5)
+                    if sample_values.any() and isinstance(sample_values.iloc[0], Decimal):
+                        df[column] = df[column].astype(float)
+                        self.logger.debug(f"Converted {column} from Decimal to float")
+            
+            return df
+        except Exception as e:
+            self.logger.warning(f"Error converting decimal columns: {e}")
+            return df
     
     def _get_data_postgresql(self, ticker: str, start_date: str, end_date: str, limit: int) -> pd.DataFrame:
         """Retrieve data from PostgreSQL."""
@@ -784,6 +806,8 @@ class DatabaseService:
                 df['date'] = pd.to_datetime(df['date'])
                 df = df.set_index('date')
                 df = df.drop(['id', 'ticker', 'created_at', 'updated_at'], axis=1, errors='ignore')
+                # Convert decimal.Decimal columns to float
+                df = self._convert_decimal_columns(df)
             
             return df
     

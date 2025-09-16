@@ -27,7 +27,7 @@ class AngelOneDataDownloader:
         """Initialize Angel One data downloader."""
         self.config = AngelOneConfig()
         # Use the exact credentials from MyOwnAngleLogin.py
-        self.api_key = "3PMAARNa "  # Note the space at the end
+        self.api_key = "1TKgQThc "  # Note the space at the end
         self.client_code = "D54448"
         self.client_pin = "2251"
         self.totp_secret = "NP4SAXOKMTJQZ4KZP2TBTYXRCE"
@@ -79,7 +79,7 @@ class AngelOneDataDownloader:
             }
             
             # Use the working login URL
-            login_url = "https://apiconnect.angelbroking.com/rest/auth/angelbroking/user/v1/loginByPassword"
+            login_url = "https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/loginByPassword"
             
             response = requests.post(
                 login_url,
@@ -145,8 +145,19 @@ class AngelOneDataDownloader:
             raise
     
     def get_symbol_token(self, symbol_name: str, exchange: str = "NSE") -> str:
-        """Get symbol token for a given symbol and exchange."""
+        """Get symbol token for a given symbol and exchange using enhanced master data lookup."""
         try:
+            # First try enhanced lookup with master data
+            stock_info = self._get_stock_info_from_master(symbol_name)
+            if stock_info:
+                print(f"✅ Found Symbol: {symbol_name}")
+                print(f"   Token: {stock_info['token']}")
+                print(f"   Exchange: {stock_info['exchange']}")
+                print(f"   Name: {stock_info['name']}")
+                return stock_info['token']
+            
+            # Fallback to original method
+            print(f"⚠️ Enhanced lookup failed for {symbol_name}, trying original method...")
             df = self.get_instruments()
             
             # Filter by exchange and symbol (using contains like in working code)
@@ -171,6 +182,97 @@ class AngelOneDataDownloader:
         except Exception as e:
             print(f"❌ Error getting symbol token: {e}")
             raise
+    
+    def _get_stock_info_from_master(self, symbol: str) -> Optional[Dict]:
+        """Get stock information from Angel Broking master data"""
+        try:
+            # Load master data if not already loaded
+            if not hasattr(self, 'master_data') or self.master_data is None:
+                self._load_master_data()
+            
+            # Clean the symbol (remove suffixes)
+            clean_symbol = symbol.upper()
+            suffixes = ['.NS', '.BO', '.NSE', '.BSE']
+            for suffix in suffixes:
+                if clean_symbol.endswith(suffix):
+                    clean_symbol = clean_symbol[:-len(suffix)]
+            
+            # Search for the symbol
+            matches = self.master_data[self.master_data['symbol'] == clean_symbol]
+            
+            if matches.empty:
+                return None
+            
+            # Prefer BSE for major stocks, then NSE
+            bse_match = matches[matches['exch_seg'] == 'BSE']
+            nse_match = matches[matches['exch_seg'] == 'NSE']
+            
+            if not bse_match.empty:
+                row = bse_match.iloc[0]
+                return {
+                    'token': str(row['token']),
+                    'symbol': row['symbol'],
+                    'name': row['name'],
+                    'exchange': 'BSE',
+                    'exch_seg': row['exch_seg']
+                }
+            elif not nse_match.empty:
+                row = nse_match.iloc[0]
+                return {
+                    'token': str(row['token']),
+                    'symbol': row['symbol'],
+                    'name': row['name'],
+                    'exchange': 'NSE',
+                    'exch_seg': row['exch_seg']
+                }
+            else:
+                # Return first match
+                row = matches.iloc[0]
+                return {
+                    'token': str(row['token']),
+                    'symbol': row['symbol'],
+                    'name': row['name'],
+                    'exchange': row['exch_seg'],
+                    'exch_seg': row['exch_seg']
+                }
+                
+        except Exception as e:
+            print(f"⚠️ Enhanced lookup failed for {symbol}: {e}")
+            return None
+    
+    def _load_master_data(self):
+        """Load Angel Broking master data"""
+        try:
+            master_data_url = 'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json'
+            master_data_file = 'angel_master_data.csv'
+            
+            # Check if we need to refresh
+            should_refresh = False
+            if os.path.exists(master_data_file):
+                # Check if file is older than 1 day
+                file_time = datetime.fromtimestamp(os.path.getmtime(master_data_file))
+                if datetime.now() - file_time > timedelta(days=1):
+                    should_refresh = True
+            else:
+                should_refresh = True
+            
+            if should_refresh:
+                print("🔄 Downloading fresh Angel Broking master data...")
+                response = requests.get(master_data_url)
+                data = response.json()
+                df = pd.DataFrame(data)
+                df.to_csv(master_data_file, index=False)
+                print(f"✅ Downloaded {len(df)} instruments")
+            else:
+                print("📂 Loading cached Angel Broking master data...")
+                df = pd.read_csv(master_data_file, low_memory=False)
+                print(f"✅ Loaded {len(df)} instruments from cache")
+            
+            self.master_data = df
+            
+        except Exception as e:
+            print(f"⚠️ Error loading master data: {e}")
+            self.master_data = None
     
     def refresh_auth_token(self) -> bool:
         """Refresh authentication token."""
@@ -237,13 +339,13 @@ class AngelOneDataDownloader:
             }
             
             # Make LTP request (using working format)
-            ltp_url = "https://apiconnect.angelbroking.com/rest/secure/angelbroking/order/v1/getLtpData"
+            ltp_url = "https://apiconnect.angelone.in/rest/secure/angelbroking/order/v1/getLtpData"
             
             print(f"💰 Fetching LTP Data for {symbol_name}...")
             
             response = requests.post(
                 ltp_url,
-                data=json.dumps(ltp_payload),
+                json=ltp_payload,
                 headers=headers,
                 timeout=10
             )
@@ -365,17 +467,39 @@ class AngelOneDataDownloader:
             # Get symbol token
             symbol_token = self.get_symbol_token(symbol_name, exchange)
             
+            # Map interval to Angel One format if needed
+            interval_mapping = self.config.get_interval_mapping()
+            angel_interval = interval_mapping.get(interval, interval)
+            
             # Set default dates if not provided
             if not from_date:
                 from_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d %H:%M')
             if not to_date:
                 to_date = datetime.now().strftime('%Y-%m-%d %H:%M')
             
+            # Optimize days_back based on interval and max limits
+            max_days_by_interval = {
+                'ONE_MINUTE': 30,
+                'THREE_MINUTE': 60,
+                'FIVE_MINUTE': 100,
+                'TEN_MINUTE': 100,
+                'FIFTEEN_MINUTE': 200,
+                'THIRTY_MINUTE': 200,
+                'ONE_HOUR': 400,
+                'ONE_DAY': 2000
+            }
+            
+            max_days = max_days_by_interval.get(angel_interval, 30)
+            if days_back > max_days:
+                print(f"⚠️ Requested {days_back} days, but max for {angel_interval} is {max_days}. Using {max_days} days.")
+                days_back = max_days
+                from_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d %H:%M')
+            
             # Prepare historical data payload
             candle_payload = {
                 "exchange": exchange,
                 "symboltoken": symbol_token,
-                "interval": interval,
+                "interval": angel_interval,
                 "fromdate": from_date,
                 "todate": to_date
             }
@@ -393,8 +517,8 @@ class AngelOneDataDownloader:
                 "Authorization": f"Bearer {self.jwt_token}"
             }
             
-            # Make historical data request (using working format)
-            historical_url = "https://apiconnect.angelbroking.com/rest/secure/angelbroking/historical/v1/getCandleData"
+            # Make historical data request (using correct Angel One endpoint)
+            historical_url = "https://apiconnect.angelone.in/rest/secure/angelbroking/historical/v1/getCandleData"
             
             print(f"📊 Fetching Historical Data...")
             print(f"   Symbol: {symbol_name}")
@@ -404,7 +528,7 @@ class AngelOneDataDownloader:
             
             response = requests.post(
                 historical_url,
-                data=json.dumps(candle_payload),
+                json=candle_payload,
                 headers=headers,
                 timeout=30
             )
@@ -418,7 +542,7 @@ class AngelOneDataDownloader:
                         print("⚠️ No data received for the specified period")
                         return pd.DataFrame()
                     
-                    # Convert to DataFrame
+                    # Convert to DataFrame - data is array of arrays [datetime, open, high, low, close, volume]
                     df_candles = pd.DataFrame(candles, columns=[
                         "Datetime", "Open", "High", "Low", "Close", "Volume"
                     ])
@@ -429,6 +553,9 @@ class AngelOneDataDownloader:
                     
                     # Convert datetime
                     df_candles["Datetime"] = pd.to_datetime(df_candles["Datetime"])
+                    
+                    # Set datetime as index
+                    df_candles.set_index("Datetime", inplace=True)
                     
                     print(f"✅ Retrieved {len(df_candles)} records")
                     return df_candles

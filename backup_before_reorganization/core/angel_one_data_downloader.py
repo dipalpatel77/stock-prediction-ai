@@ -27,7 +27,7 @@ class AngelOneDataDownloader:
         """Initialize Angel One data downloader."""
         self.config = AngelOneConfig()
         # Use the exact credentials from MyOwnAngleLogin.py
-        self.api_key = "3PMAARNa "  # Note the space at the end
+        self.api_key = "1TKgQThc "  # Note the space at the end
         self.client_code = "D54448"
         self.client_pin = "2251"
         self.totp_secret = "NP4SAXOKMTJQZ4KZP2TBTYXRCE"

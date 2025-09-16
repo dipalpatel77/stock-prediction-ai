@@ -25,15 +25,33 @@ from .incremental_data_service import IncrementalDataService
 class DataService:
     """Shared data loading and preprocessing service."""
     
-    def __init__(self, cache_dir: str = "data/cache", period_config: str = "recommended"):
+    def __init__(self, cache_dir: str = "data/cache", period_config: str = "recommended", use_database: bool = True):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.data_cache = {}
         self.cache_lock = threading.Lock()
         self.current_prices = {}
         
+        # Initialize database service if requested
+        self.use_database = use_database
+        self.db_service = None
+        if self.use_database:
+            try:
+                from .database_service import DatabaseService
+                from config.database_config import get_database_config
+                db_config = get_database_config('local')
+                self.db_service = DatabaseService(
+                    db_type=db_config.db_type,
+                    connection_string=db_config.connection_string
+                )
+                print(f"✅ Database service initialized: {db_config.db_type}")
+            except Exception as e:
+                print(f"⚠️ Database initialization failed: {e}, using file system only")
+                self.use_database = False
+                self.db_service = None
+        
         # Initialize incremental data service
-        self.incremental_service = IncrementalDataService()
+        self.incremental_service = IncrementalDataService(use_database=self.use_database)
         
         # Data validation settings
         self.min_data_points = 100
@@ -125,6 +143,23 @@ class DataService:
         cache_key = f"{ticker}_{period}_{interval}"
         cache_file = self.cache_dir / f"{cache_key}.pkl"
         
+        # Try database first if available and not forcing refresh
+        if self.use_database and not force_refresh:
+            try:
+                print(f"🔍 Checking database for {ticker}...")
+                db_data = self.db_service.get_stock_data(ticker)
+                if db_data is not None and not db_data.empty:
+                    latest_date = db_data.index.max()
+                    days_old = (datetime.now() - latest_date).days
+                    
+                    if days_old <= 1:  # Data is fresh (within 1 day)
+                        print(f"✅ Loaded fresh data from database for {ticker} ({len(db_data)} records)")
+                        return db_data
+                    else:
+                        print(f"📅 Database data for {ticker} is {days_old} days old, updating...")
+            except Exception as e:
+                print(f"⚠️ Database query failed for {ticker}: {e}")
+        
         # Check cache first (unless force refresh)
         if not force_refresh and cache_file.exists():
             try:
@@ -150,6 +185,20 @@ class DataService:
         data = self._download_stock_data(ticker, period, interval)
         
         if data is not None and self._validate_data(data):
+            # Determine data source for database storage
+            data_source = "angel_one" if self._is_indian_stock(ticker) else "yfinance"
+            
+            # Store in database if available
+            if self.use_database:
+                try:
+                    success = self.db_service.store_stock_data(ticker, data, data_source)
+                    if success:
+                        print(f"💾 Data stored in database for {ticker} from {data_source}")
+                    else:
+                        print(f"⚠️ Failed to store data in database for {ticker}")
+                except Exception as e:
+                    print(f"⚠️ Database storage error for {ticker}: {e}")
+            
             # Cache the data
             try:
                 with self.cache_lock:
@@ -223,40 +272,37 @@ class DataService:
             raise ValueError(f"Failed to load valid data for {ticker}")
     
     def _download_stock_data_custom_dates(self, ticker: str, start_date: str, end_date: str, interval: str) -> Optional[pd.DataFrame]:
-        """Download stock data for custom date range with intelligent source selection."""
+        """Download stock data for custom date range with dedicated source selection: Angel One for Indian stocks, Yahoo Finance for US stocks."""
         try:
-            # For Indian stocks: Try Angel One first, then yfinance as fallback
+            # For Indian stocks: Use Angel One ONLY
             if self._is_indian_stock(ticker):
                 print(f"🇮🇳 Indian stock detected: {ticker}")
-                print(f"🔄 Trying Angel One first for {ticker}...")
+                print(f"🔄 Using Angel One ONLY for {ticker}...")
                 
-                # Try Angel One first
+                # Use Angel One exclusively for Indian stocks
                 angel_data = self._download_from_angel_one_custom_dates(ticker, start_date, end_date, interval)
                 if angel_data is not None and not angel_data.empty:
                     print(f"✅ Successfully downloaded {len(angel_data)} records for {ticker} from Angel One")
                     return angel_data
                 
-                # Fallback to yfinance
-                print(f"⚠️ Angel One failed for {ticker}, trying yfinance as fallback...")
-                yahoo_data = self._download_from_yahoo_custom_dates(ticker, start_date, end_date, interval)
-                if yahoo_data is not None and not yahoo_data.empty:
-                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from yfinance (fallback)")
-                    return yahoo_data
-                
-                print(f"❌ Both Angel One and yfinance failed for {ticker}")
+                # Angel One failed
+                print(f"❌ Angel One failed for {ticker}")
+                print(f"❌ Angel One is the ONLY source for Indian stocks - no fallback available")
                 return None
             
-            # For non-Indian stocks: Use yfinance
+            # For US stocks: Use Yahoo Finance ONLY
             else:
-                print(f"🌍 Non-Indian stock detected: {ticker}")
-                print(f"🔄 Using yfinance for {ticker}...")
+                print(f"🇺🇸 US stock detected: {ticker}")
+                print(f"🔄 Using Yahoo Finance ONLY for {ticker}...")
                 
                 yahoo_data = self._download_from_yahoo_custom_dates(ticker, start_date, end_date, interval)
                 if yahoo_data is not None and not yahoo_data.empty:
-                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from yfinance")
+                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from Yahoo Finance")
                     return yahoo_data
                 
-                print(f"❌ yfinance failed for {ticker}")
+                # Yahoo Finance failed
+                print(f"❌ Yahoo Finance failed for {ticker}")
+                print(f"❌ Yahoo Finance is the ONLY source for US stocks - no fallback available")
                 return None
             
         except Exception as e:
@@ -264,55 +310,50 @@ class DataService:
             return None
     
     def _download_stock_data(self, ticker: str, period: str, interval: str) -> Optional[pd.DataFrame]:
-        """Download stock data with intelligent source selection."""
+        """Download stock data with dedicated source selection: Angel One for Indian stocks, Yahoo Finance for US stocks."""
         try:
-            # For Indian stocks: Try Angel One first, then yfinance as fallback
+            # For Indian stocks: Use Angel One ONLY
             if self._is_indian_stock(ticker):
                 print(f"🇮🇳 Indian stock detected: {ticker}")
-                print(f"🔄 Trying Angel One first for {ticker}...")
+                print(f"🔄 Using Angel One ONLY for {ticker}...")
                 
-                # Try Angel One first
+                # Use Angel One exclusively for Indian stocks
                 angel_data = self._download_from_angel_one(ticker, period, interval)
                 if angel_data is not None and not angel_data.empty:
                     print(f"✅ Successfully downloaded {len(angel_data)} records for {ticker} from Angel One")
                     return angel_data
                 
-                # Fallback to yfinance
-                print(f"⚠️ Angel One failed for {ticker}, trying yfinance as fallback...")
-                yahoo_data = self._download_from_yahoo(ticker, period, interval)
-                if yahoo_data is not None and not yahoo_data.empty:
-                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from yfinance (fallback)")
-                    return yahoo_data
-                
-                # Both sources failed - provide detailed error information
-                print(f"❌ Both Angel One and yfinance failed for {ticker}")
+                # Angel One failed - provide detailed error information
+                print(f"❌ Angel One failed for {ticker}")
                 print(f"   💡 This could be due to:")
                 print(f"   - Angel One authentication issues (check API credentials)")
-                print(f"   - Stock not available on international exchanges (yfinance)")
+                print(f"   - Stock not available on Angel One")
+                print(f"   - Stock may be delisted or suspended")
+                print(f"   - Network connectivity issues")
+                print(f"   - Invalid ticker format for Indian market")
+                
+                print(f"❌ Angel One is the ONLY source for Indian stocks - no fallback available")
+                return None
+            
+            # For US stocks: Use Yahoo Finance ONLY
+            else:
+                print(f"🇺🇸 US stock detected: {ticker}")
+                print(f"🔄 Using Yahoo Finance ONLY for {ticker}...")
+                
+                yahoo_data = self._download_from_yahoo(ticker, period, interval)
+                if yahoo_data is not None and not yahoo_data.empty:
+                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from Yahoo Finance")
+                    return yahoo_data
+                
+                # Yahoo Finance failed - provide detailed error information
+                print(f"❌ Yahoo Finance failed for {ticker}")
+                print(f"   💡 This could be due to:")
+                print(f"   - Invalid ticker symbol")
+                print(f"   - Stock not available on US exchanges")
                 print(f"   - Stock may be delisted or suspended")
                 print(f"   - Network connectivity issues")
                 
-                # Try with .NS suffix for yfinance as additional fallback
-                print(f"🔄 Trying with .NS suffix for {ticker}...")
-                yahoo_data_ns = self._download_from_yahoo(f"{ticker}.NS", period, interval)
-                if yahoo_data_ns is not None and not yahoo_data_ns.empty:
-                    print(f"✅ Successfully downloaded {len(yahoo_data_ns)} records for {ticker}.NS from yfinance")
-                    return yahoo_data_ns
-                
-                print(f"❌ All data sources failed for {ticker}")
-                return None
-            
-            # For non-Indian stocks: Use yfinance first
-            else:
-                print(f"🌍 Non-Indian stock detected: {ticker}")
-                print(f"🔄 Using yfinance for {ticker}...")
-                
-                yahoo_data = self._download_from_yahoo(ticker, period, interval)
-                if yahoo_data is not None and not yahoo_data.empty:
-                    print(f"✅ Successfully downloaded {len(yahoo_data)} records for {ticker} from yfinance")
-                    return yahoo_data
-                
-                print(f"❌ yfinance failed for {ticker}")
+                print(f"❌ Yahoo Finance is the ONLY source for US stocks - no fallback available")
                 return None
             
         except Exception as e:
@@ -324,11 +365,16 @@ class DataService:
         # Reset index to make Date a column
         df = df.reset_index()
         
-        # Ensure Date column exists and is datetime
-        if 'Date' not in df.columns and df.index.name == 'Date':
+        # Handle different date column names (Datetime from Angel One, Date from yfinance)
+        if 'Datetime' in df.columns:
+            df = df.rename(columns={'Datetime': 'Date'})
+        elif 'Date' not in df.columns and df.index.name == 'Date':
             df = df.reset_index()
         
         df['Date'] = pd.to_datetime(df['Date'], utc=True).dt.tz_localize(None)
+        
+        # Convert decimal.Decimal columns to float (from database)
+        df = self._convert_decimal_columns(df)
         
         # Handle missing values
         df = self._handle_missing_values(df)
@@ -351,6 +397,24 @@ class DataService:
         df = df[missing_ratio < self.max_missing_ratio]
         
         return df
+    
+    def _convert_decimal_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Convert decimal.Decimal columns to float for compatibility."""
+        try:
+            from decimal import Decimal
+            
+            for column in df.columns:
+                if df[column].dtype == 'object':
+                    # Check if column contains Decimal objects
+                    sample_values = df[column].dropna().head(5)
+                    if sample_values.any() and isinstance(sample_values.iloc[0], Decimal):
+                        df[column] = df[column].astype(float)
+                        print(f"✅ Converted {column} from Decimal to float")
+            
+            return df
+        except Exception as e:
+            print(f"⚠️ Error converting decimal columns: {e}")
+            return df
     
     def _add_basic_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add basic features to the dataset."""
@@ -382,7 +446,8 @@ class DataService:
         
         # Adjust minimum data points based on data length
         # For short periods (1mo, 3mo), allow fewer data points
-        min_required = min(self.min_data_points, max(10, len(df) // 2))
+        # For Angel One data, be more lenient as it may have fewer records
+        min_required = min(self.min_data_points, max(5, len(df) // 2))
         
         if len(df) < min_required:
             print(f"⚠️ Insufficient data points: {len(df)} < {min_required}")
@@ -750,7 +815,7 @@ class DataService:
     def _download_from_angel_one(self, ticker: str, period: str, interval: str) -> Optional[pd.DataFrame]:
         """Download data from Angel One API using Indian Stock Mapper for symbol lookup."""
         try:
-            from .angel_one_data_downloader import AngelOneDataDownloader
+            from src.utils.angel_one_data_downloader import AngelOneDataDownloader
             from src.utils.indian_stock_mapper import get_symbol_info, load_angel_master
             
             # Initialize Angel One downloader
@@ -783,12 +848,12 @@ class DataService:
             print(f"✅ Found '{base_ticker}' in Angel One: Token={symbol_info['token']}, Exchange={symbol_info['exchange']}")
             
             # Download data using the symbol info from mapper
+            # Use maximum days for better historical data (up to 2000 days for daily data)
             df = angel_downloader.get_historical_data(
                 symbol_name=base_ticker,
                 exchange=symbol_info['exchange'],
                 interval=interval,
-                from_date=(datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d'),
-                to_date=datetime.now().strftime('%Y-%m-%d')
+                days_back=365  # Use 1 year for comprehensive data
             )
             
             if df is not None and not df.empty:
@@ -828,7 +893,7 @@ class DataService:
     def _get_current_price_from_angel_one(self, ticker: str) -> Optional[float]:
         """Get current price from Angel One API."""
         try:
-            from .angel_one_data_downloader import AngelOneDataDownloader
+            from src.utils.angel_one_data_downloader import AngelOneDataDownloader
             
             # Initialize Angel One downloader
             angel_downloader = AngelOneDataDownloader()
@@ -886,7 +951,7 @@ class DataService:
     def _download_from_angel_one_custom_dates(self, ticker: str, start_date: str, end_date: str, interval: str) -> Optional[pd.DataFrame]:
         """Download data from Angel One API for custom date range using Indian Stock Mapper."""
         try:
-            from .angel_one_data_downloader import AngelOneDataDownloader
+            from src.utils.angel_one_data_downloader import AngelOneDataDownloader
             from src.utils.indian_stock_mapper import get_symbol_info, load_angel_master
             
             # Initialize Angel One downloader

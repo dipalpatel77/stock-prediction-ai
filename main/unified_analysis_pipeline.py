@@ -40,13 +40,32 @@ warnings.filterwarnings('ignore')
 from src.core import DataService, ModelService, ReportingService, StrategyService
 from config import AnalysisConfig
 
+# Pipeline utilities (fallback implementations)
+class PipelineLogger:
+    @staticmethod
+    def warning(message, details=""):
+        print(f"⚠️ {message}: {details}")
+    
+    @staticmethod
+    def success(message, details=""):
+        print(f"✅ {message}: {details}")
+    
+    @staticmethod
+    def error(message, details=""):
+        print(f"❌ {message}: {details}")
+
+class ErrorHandler:
+    @staticmethod
+    def handle_analysis_error(context, error, fallback=""):
+        print(f"❌ Error in {context}: {error}. {fallback}")
+
 # Import analysis modules for multi-timeframe analysis
 try:
     from src.analysis import ShortTermAnalyzer, MidTermAnalyzer, LongTermAnalyzer
     ANALYSIS_MODULES_AVAILABLE = True
 except ImportError:
     ANALYSIS_MODULES_AVAILABLE = False
-    print("⚠️ Analysis modules not available. Multi-timeframe analysis will be limited.")
+    PipelineLogger.warning("Analysis modules not available", "Multi-timeframe analysis will be limited")
 
 # Import currency utilities
 try:
@@ -54,7 +73,25 @@ try:
     CURRENCY_UTILS_AVAILABLE = True
 except ImportError:
     CURRENCY_UTILS_AVAILABLE = False
-    print("⚠️ Currency utilities not available. Using default formatting.")
+    PipelineLogger.warning("Currency utilities not available", "Using default formatting")
+    
+    # Fallback currency formatting functions
+    def format_price(price, currency="USD"):
+        """Fallback price formatting function."""
+        if price is None or pd.isna(price):
+            return "N/A"
+        return f"${price:.2f}"
+    
+    def format_change(change, currency="USD"):
+        """Fallback change formatting function."""
+        if change is None or pd.isna(change):
+            return "N/A"
+        sign = "+" if change >= 0 else ""
+        return f"{sign}{change:.2f}%"
+    
+    def get_currency_symbol(currency="USD"):
+        """Fallback currency symbol function."""
+        return "$"
 
 # Import date utilities
 try:
@@ -62,43 +99,43 @@ try:
     DATE_UTILS_AVAILABLE = True
 except ImportError:
     DATE_UTILS_AVAILABLE = False
-    print("⚠️ Date utilities not available. Using default date formatting.")
+    PipelineLogger.warning("Date utilities not available", "Using default date formatting")
 
 # Import Phase 1 integration
 try:
     from src.integrations.phase1_integration import Phase1Integration
     PHASE1_AVAILABLE = True
-    print("✅ Phase 1 integration available - Enhanced analysis enabled!")
+    PipelineLogger.success("Phase 1 integration available", "Enhanced analysis enabled")
 except ImportError:
     PHASE1_AVAILABLE = False
-    print("⚠️ Phase 1 integration not available. Using standard analysis.")
+    PipelineLogger.warning("Phase 1 integration not available", "Using standard analysis")
 
 # Import Phase 2 integration
 try:
     from src.integrations.phase2_integration import Phase2Integration
     PHASE2_AVAILABLE = True
-    print("✅ Phase 2 integration available - Economic data & regulatory monitoring enabled!")
+    PipelineLogger.success("Phase 2 integration available", "Economic data & regulatory monitoring enabled")
 except ImportError:
     PHASE2_AVAILABLE = False
-    print("⚠️ Phase 2 integration not available. Using Phase 1 analysis only.")
+    PipelineLogger.warning("Phase 2 integration not available", "Using Phase 1 analysis only")
 
 # Import Phase 3 integration
 try:
     from src.integrations.phase3_integration import Phase3Integration
     PHASE3_AVAILABLE = True
-    print("✅ Phase 3 integration available - Geopolitical risk, corporate actions & insider trading enabled!")
+    PipelineLogger.success("Phase 3 integration available", "Geopolitical risk, corporate actions & insider trading enabled")
 except ImportError:
     PHASE3_AVAILABLE = False
-    print("⚠️ Phase 3 integration not available. Using Phase 1 & 2 analysis only.")
+    PipelineLogger.warning("Phase 3 integration not available", "Using Phase 1 & 2 analysis only")
 
 # Import Comprehensive Report Generation
 try:
     from src.integrations.comprehensive_report_integration import ComprehensiveReportIntegration
     COMPREHENSIVE_REPORTS_AVAILABLE = True
-    print("✅ Comprehensive Report Generation available - Multi-currency & enhanced date formatting enabled!")
+    PipelineLogger.success("Comprehensive Report Generation available", "Multi-currency & enhanced date formatting enabled")
 except ImportError:
     COMPREHENSIVE_REPORTS_AVAILABLE = False
-    print("⚠️ Comprehensive Report Generation not available. Using standard reports only.")
+    PipelineLogger.warning("Comprehensive Report Generation not available", "Using standard reports only")
 
 # Advanced ML imports (optional)
 try:
@@ -120,7 +157,7 @@ try:
     ADVANCED_AVAILABLE = True
 except ImportError:
     ADVANCED_AVAILABLE = False
-    print("⚠️ Advanced models not available. Install xgboost, lightgbm, and catboost for full functionality.")
+    PipelineLogger.warning("Advanced models not available", "Install xgboost, lightgbm, and catboost for full functionality")
 
 class TimeoutError(Exception):
     """Custom timeout exception."""
@@ -231,12 +268,9 @@ class UnifiedAnalysisPipeline:
         return ticker
     
     def __init__(self, ticker, max_workers=None, period_config="recommended"):
-        # Set environment variables for Angel One
-        os.environ['ANGEL_ONE_API_KEY'] = '3PMAARNa'
-        os.environ['ANGEL_ONE_CLIENT_CODE'] = 'D54448'
-        os.environ['ANGEL_ONE_CLIENT_PIN'] = '2251'
-        os.environ['ANGEL_ONE_TOTP_SECRET'] = 'NP4SAXOKMTJQZ4KZP2TBTYXRCE'
-        
+        """
+        Initialize the Unified Analysis Pipeline.
+        """
         # Fix ticker format for Indian stocks
         self.original_ticker = ticker.upper()
         self.ticker = self._fix_ticker_format(ticker.upper())
@@ -271,7 +305,7 @@ class UnifiedAnalysisPipeline:
         
         # Initialize core services with period configuration
         self.config = AnalysisConfig()
-        self.data_service = DataService(period_config=period_config)
+        self.data_service = DataService(period_config=period_config, use_database=True)
         self.model_service = ModelService()
         self.reporting_service = ReportingService()
         self.strategy_service = StrategyService()
@@ -304,6 +338,39 @@ class UnifiedAnalysisPipeline:
             self.short_term_analyzer = None
             self.mid_term_analyzer = None
             self.long_term_analyzer = None
+        
+        # Initialize phase integrations
+        self.phase1_integration = None
+        self.phase2_integration = None
+        self.phase3_integration = None
+        self.comprehensive_report_integration = None
+        
+        # Initialize phase integrations if available
+        if PHASE1_AVAILABLE:
+            try:
+                self.phase1_integration = Phase1Integration()
+            except Exception as e:
+                PipelineLogger.warning("Phase 1 integration initialization failed", str(e))
+        
+        if PHASE2_AVAILABLE:
+            try:
+                self.phase2_integration = Phase2Integration()
+            except Exception as e:
+                PipelineLogger.warning("Phase 2 integration initialization failed", str(e))
+        
+        if PHASE3_AVAILABLE:
+            try:
+                self.phase3_integration = Phase3Integration()
+            except Exception as e:
+                PipelineLogger.warning("Phase 3 integration initialization failed", str(e))
+        
+        if COMPREHENSIVE_REPORTS_AVAILABLE:
+            try:
+                self.comprehensive_report_integration = ComprehensiveReportIntegration()
+            except Exception as e:
+                PipelineLogger.warning("Comprehensive report integration initialization failed", str(e))
+        
+        PipelineLogger.success("Unified Analysis Pipeline initialized", f"Ticker: {self.ticker}, Workers: {self.max_workers}")
         
     def get_user_data_period_choice(self):
         """Get user choice for historical data period with configuration-aware options."""
@@ -351,7 +418,7 @@ class UnifiedAnalysisPipeline:
                 default_period = self.period_settings.get('default', '1y')
                 return default_period, f"{default_period} (Default)"
             except Exception as e:
-                print(f"❌ Error: {e}. Using default period.")
+                ErrorHandler.handle_analysis_error("Period selection", e, "default period")
                 default_period = self.period_settings.get('default', '1y')
                 return default_period, f"{default_period} (Default)"
     
@@ -393,7 +460,7 @@ class UnifiedAnalysisPipeline:
                 default_period = self.period_settings.get('default', '1y')
                 return default_period, f"{default_period} (Default)"
             except Exception as e:
-                print(f"❌ Error: {e}. Using default period.")
+                ErrorHandler.handle_analysis_error("Period selection", e, "default period")
                 default_period = self.period_settings.get('default', '1y')
                 return default_period, f"{default_period} (Default)"
     
@@ -628,9 +695,9 @@ class UnifiedAnalysisPipeline:
                 try:
                     result = future.result()
                     self.timeframe_results[timeframe] = result
-                    print(f"✅ {timeframe.replace('_', ' ').title()} analysis completed")
+                    PipelineLogger.success(f"{timeframe.replace('_', ' ').title()} analysis completed")
                 except Exception as e:
-                    print(f"❌ {timeframe.replace('_', ' ').title()} analysis failed: {e}")
+                    ErrorHandler.handle_analysis_error(f"{timeframe.replace('_', ' ').title()} analysis", e, "standard analysis")
                     self.timeframe_results[timeframe] = {'success': False, 'error': str(e)}
         
         execution_time = time.time() - start_time
@@ -2800,7 +2867,7 @@ class UnifiedAnalysisPipeline:
             
             # Save detailed confidence analysis
             if confidence_analysis:
-                confidence_data = {
+                confidence_data = { 
                     'Analysis_Date': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
             'Analysis_Date_Full': [DateUtils.format_analysis_timestamp()['analysis_date_full'] if DATE_UTILS_AVAILABLE else datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
             'Analysis_Month': [DateUtils.format_analysis_timestamp()['month_name'] if DATE_UTILS_AVAILABLE else datetime.now().strftime('%B')],

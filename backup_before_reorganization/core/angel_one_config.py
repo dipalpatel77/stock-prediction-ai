@@ -17,7 +17,7 @@ class AngelOneConfig:
     def __init__(self):
         """Initialize Angel One configuration."""
         self.base_url = "https://apiconnect.angelbroking.com"
-        self.api_key = os.getenv('ANGEL_ONE_API_KEY', '3PMAARNa ')
+        self.api_key = os.getenv('ANGEL_ONE_API_KEY', '1TKgQThc ')
         self.client_code = os.getenv('ANGEL_ONE_CLIENT_CODE', 'D54448')
         self.client_pin = os.getenv('ANGEL_ONE_CLIENT_PIN', '2251')
         self.totp_secret = os.getenv('ANGEL_ONE_TOTP_SECRET', 'NP4SAXOKMTJQZ4KZP2TBTYXRCE')
