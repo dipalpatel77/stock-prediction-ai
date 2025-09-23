@@ -71,11 +71,14 @@ The AI Stock Predictor is a comprehensive, enterprise-grade system that provides
 
 ### 4. Database & Storage Features
 
-- **MySQL Integration**: High-performance database storage
+- **Interval-Specific Storage**: Purpose-built tables for different trading strategies
+- **MySQL Integration**: High-performance database storage with optimized schemas
+- **Automatic Data Routing**: Smart routing to appropriate tables based on interval
 - **Data Quality Tracking**: Comprehensive quality metrics and monitoring
 - **Incremental Updates**: Smart data merging and change detection
 - **Multi-source Support**: Unified storage for different data sources
 - **Performance Optimization**: Indexed queries and batch operations
+- **Automatic Aggregation**: Daily data creates weekly/monthly aggregates
 
 ## 🛠️ How to Use the System
 
@@ -114,6 +117,35 @@ python run_custom_analysis.py
 python notebook_interface.py
 ```
 
+#### Interval-Specific Storage (NEW)
+
+The system now uses **interval-specific tables** optimized for different trading strategies:
+
+```python
+# Automatic routing to appropriate table based on interval
+from src.core.interval_specific_storage import IntervalSpecificStorage
+
+storage = IntervalSpecificStorage()
+storage.store_data_by_interval(
+    df=dataframe,
+    ticker='RELIANCE',
+    exchange='NSE',
+    interval='FIVE_MINUTE',  # Automatically goes to intraday_5min table
+    symbol_token='500325'
+)
+```
+
+**Available Tables:**
+
+- `intraday_1min` - High-frequency trading, scalping
+- `intraday_5min` - Day trading, swing trading
+- `intraday_15min` - Position trading, trend analysis
+- `intraday_30min` - Trend following, technical analysis
+- `hourly_data` - Portfolio management, risk assessment
+- `daily_data` - Fundamental analysis, long-term investing
+- `weekly_data` - Trend analysis, performance metrics (auto-generated)
+- `monthly_data` - Annual analysis, market cycles (auto-generated)
+
 #### Database Operations
 
 ```bash
@@ -132,7 +164,7 @@ python test_angel_database_integration.py
 #### Basic Usage
 
 ```python
-from main.unified_analysis_pipeline import UnifiedAnalysisPipeline
+from main.pipeline.core_pipeline import UnifiedAnalysisPipeline
 
 # Initialize pipeline with database integration
 pipeline = UnifiedAnalysisPipeline(

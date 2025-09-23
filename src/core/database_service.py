@@ -438,8 +438,16 @@ class DatabaseService:
     def _prepare_data_for_storage(self, data: pd.DataFrame, ticker: str) -> pd.DataFrame:
         """Prepare data for database storage."""
         # Reset index to make Date a column
-        if data.index.name == 'Date' or 'Date' in str(data.index.dtype):
+        if data.index.name in ['Date', 'Datetime'] or 'Date' in str(data.index.dtype) or 'Datetime' in str(data.index.dtype):
             data = data.reset_index()
+        
+        # Handle different date column names (Datetime from Angel One, Date from yfinance)
+        if 'Datetime' in data.columns:
+            data = data.rename(columns={'Datetime': 'Date'})
+        elif 'Date' not in data.columns and data.index.name in ['Date', 'Datetime']:
+            data = data.reset_index()
+            if 'Datetime' in data.columns:
+                data = data.rename(columns={'Datetime': 'Date'})
         
         # Ensure Date column is datetime
         if 'Date' in data.columns:

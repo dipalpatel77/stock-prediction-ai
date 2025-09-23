@@ -49,6 +49,16 @@ This guide covers the comprehensive database implementation for the AI Stock Pre
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
+│              Interval-Specific Storage                      │
+├─────────────────────────────────────────────────────────────┤
+│  • intraday_1min       • intraday_5min                     │
+│  • intraday_15min      • intraday_30min                    │
+│  • hourly_data         • daily_data                        │
+│  • weekly_data         • monthly_data                      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
 │                Incremental Data Service                     │
 ├─────────────────────────────────────────────────────────────┤
 │  • Smart Updates        • Data Merging                     │
@@ -65,6 +75,85 @@ This guide covers the comprehensive database implementation for the AI Stock Pre
 ```
 
 ## 🗃️ Database Schema
+
+### **Interval-Specific Storage System (NEW)**
+
+The system now uses **interval-specific tables** optimized for different trading strategies and use cases:
+
+#### **📊 Table Structure Overview:**
+
+| **Table**        | **Interval** | **Use Case**                              | **Max Batch Size** |
+| ---------------- | ------------ | ----------------------------------------- | ------------------ |
+| `intraday_1min`  | 1-minute     | High-frequency trading, scalping          | 1,000 records      |
+| `intraday_5min`  | 5-minute     | Day trading, swing trading                | 2,000 records      |
+| `intraday_15min` | 15-minute    | Position trading, trend analysis          | 5,000 records      |
+| `intraday_30min` | 30-minute    | Trend following, technical analysis       | 10,000 records     |
+| `hourly_data`    | 1-hour       | Portfolio management, risk assessment     | 20,000 records     |
+| `daily_data`     | 1-day        | Fundamental analysis, long-term investing | 50,000 records     |
+| `weekly_data`    | Weekly       | Trend analysis, performance metrics       | Auto-generated     |
+| `monthly_data`   | Monthly      | Annual analysis, market cycles            | Auto-generated     |
+
+#### **🎯 Benefits of Interval-Specific Storage:**
+
+- **Optimized Performance:** Each table is tuned for its specific use case
+- **Efficient Indexing:** Purpose-built indexes for common queries
+- **Automatic Aggregation:** Daily data automatically creates weekly/monthly aggregates
+- **Better Organization:** Data separated by trading strategy requirements
+- **Scalable Architecture:** Easy to add new intervals or modify existing ones
+
+#### **📈 Storage Service (`src/core/interval_specific_storage.py`):**
+
+```python
+from src.core.interval_specific_storage import IntervalSpecificStorage
+
+# Initialize storage service
+storage = IntervalSpecificStorage()
+
+# Store data - automatically routes to correct table
+storage.store_data_by_interval(
+    df=dataframe,
+    ticker='RELIANCE',
+    exchange='NSE',
+    interval='FIVE_MINUTE',  # Automatically goes to intraday_5min
+    symbol_token='500325'
+)
+```
+
+#### **🔍 Query Examples by Use Case:**
+
+**High-Frequency Trading (1-minute data):**
+
+```sql
+SELECT * FROM intraday_1min
+WHERE ticker='RELIANCE'
+AND datetime >= NOW() - INTERVAL 1 HOUR;
+```
+
+**Day Trading (5-minute data):**
+
+```sql
+SELECT * FROM intraday_5min
+WHERE ticker='RELIANCE'
+AND DATE(datetime) = CURDATE();
+```
+
+**Long-term Analysis (Daily data):**
+
+```sql
+SELECT * FROM daily_data
+WHERE ticker='RELIANCE'
+AND date >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR);
+```
+
+**Performance Analysis (Weekly aggregates):**
+
+```sql
+SELECT price_change_pct FROM weekly_data
+WHERE ticker='RELIANCE'
+ORDER BY week_start_date DESC LIMIT 52;
+```
+
+### **Legacy Tables:**
 
 ### **Stock Data Table:**
 

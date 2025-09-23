@@ -1,0 +1,70 @@
+{
+  "timestamp": "2025-09-21T17:42:04.374520",
+  "execution_time": 42.62160038948059,
+  "overall_statistics": {
+    "total_tests": 145,
+    "total_failures": 39,
+    "total_errors": 16,
+    "overall_success_rate": 62.06896551724138
+  },
+  "suite_results": {
+    "pipeline_components": {
+      "total_tests": 0,
+      "failures": 0,
+      "errors": 1,
+      "success_rate": 0,
+      "summary": "Error running tests: No module named 'main.pipeline.enhanced_model_trainer'"
+    },
+    "services": {
+      "total_tests": 67,
+      "failures": 24,
+      "errors": 8,
+      "success_rate": 52.23880597014925,
+      "summary": "67 tests, 52.2% success"
+    },
+    "utils": {
+      "total_tests": 78,
+      "failures": 15,
+      "errors": 4,
+      "success_rate": 75.64102564102564,
+      "summary": "78 tests, 75.6% success"
+    },
+    "integration": {
+      "total_tests": 0,
+      "failures": 0,
+      "errors": 1,
+      "success_rate": 0,
+      "summary": "Error running tests: No module named 'main.pipeline.enhanced_model_trainer'"
+    },
+    "performance": {
+      "total_tests": 0,
+      "failures": 0,
+      "errors": 1,
+      "success_rate": 0,
+      "summary": "Error running tests: No module named 'main.pipeline.enhanced_model_trainer'"
+    },
+    "validation": {
+      "total_tests": 0,
+      "failures": 0,
+      "errors": 1,
+      "success_rate": 0,
+      "summary": "Error running tests: No module named 'main.pipeline.enhanced_model_trainer'"
+    }
+  },
+  "recommendations": [
+    "Improve pipeline_components test suite - current success rate: 0.0%",
+    "Fix 1 errors in pipeline_components test suite",
+    "Improve services test suite - current success rate: 52.2%",
+    "Fix 8 errors in services test suite",
+    "Address 24 failures in services test suite",
+    "Improve utils test suite - current success rate: 75.6%",
+    "Fix 4 errors in utils test suite",
+    "Address 15 failures in utils test suite",
+    "Improve integration test suite - current success rate: 0.0%",
+    "Fix 1 errors in integration test suite",
+    "Improve performance test suite - current success rate: 0.0%",
+    "Fix 1 errors in performance test suite",
+    "Improve validation test suite - current success rate: 0.0%",
+    "Fix 1 errors in validation test suite"
+  ]
+}

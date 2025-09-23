@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, '.')
 
 from interactive_data_selector import InteractiveDataSelector
-from main.unified_analysis_pipeline import UnifiedAnalysisPipeline
+from main.pipeline.core_pipeline import UnifiedAnalysisPipeline
 import pandas as pd
 from datetime import datetime
 

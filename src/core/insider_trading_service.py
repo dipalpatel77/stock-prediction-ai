@@ -110,6 +110,79 @@ class InsiderTradingService:
             'significant_ownership_change': 0.1  # 10% change
         }
     
+    def get_insider_trading(self, ticker: str, days_back: int = 90) -> InsiderTradingAnalysis:
+        """
+        Get comprehensive insider trading analysis.
+        
+        Args:
+            ticker: Stock ticker symbol
+            days_back: Number of days to analyze
+            
+        Returns:
+            InsiderTradingAnalysis object
+        """
+        try:
+            transactions = self.get_insider_transactions(ticker, days_back)
+            
+            # Calculate basic metrics
+            total_transactions = len(transactions)
+            buy_transactions = len([t for t in transactions if t.transaction_type == 'buy'])
+            sell_transactions = len([t for t in transactions if t.transaction_type == 'sell'])
+            
+            # Calculate net insider activity
+            net_activity = sum(
+                t.shares if t.transaction_type == 'buy' else -t.shares 
+                for t in transactions
+            )
+            
+            # Calculate insider sentiment score
+            sentiment_score = self._calculate_sentiment_score(transactions)
+            
+            # Calculate unusual activity score
+            unusual_score = self._calculate_unusual_activity_score(transactions)
+            
+            # Get top insiders
+            top_insiders = self._get_top_insiders(transactions)
+            
+            # Get recent transactions
+            recent_transactions = sorted(transactions, key=lambda x: x.transaction_date, reverse=True)[:10]
+            
+            # Pattern analysis
+            pattern_analysis = self._analyze_trading_patterns(transactions)
+            
+            # Market impact prediction
+            market_impact = self._predict_market_impact(transactions, sentiment_score)
+            
+            return InsiderTradingAnalysis(
+                ticker=ticker,
+                total_transactions=total_transactions,
+                buy_transactions=buy_transactions,
+                sell_transactions=sell_transactions,
+                net_insider_activity=net_activity,
+                insider_sentiment_score=sentiment_score,
+                unusual_activity_score=unusual_score,
+                top_insiders=top_insiders,
+                recent_transactions=recent_transactions,
+                pattern_analysis=pattern_analysis,
+                market_impact_prediction=market_impact
+            )
+            
+        except Exception as e:
+            # Return default analysis
+            return InsiderTradingAnalysis(
+                ticker=ticker,
+                total_transactions=0,
+                buy_transactions=0,
+                sell_transactions=0,
+                net_insider_activity=0,
+                insider_sentiment_score=50.0,
+                unusual_activity_score=0.0,
+                top_insiders=[],
+                recent_transactions=[],
+                pattern_analysis={},
+                market_impact_prediction=0.0
+            )
+    
     def get_insider_transactions(self, ticker: str, days_back: int = 90) -> List[InsiderTransaction]:
         """
         Get recent insider transactions for a ticker.

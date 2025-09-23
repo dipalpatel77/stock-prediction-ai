@@ -49,65 +49,80 @@ class AngelOneDataDownloader:
         self.instruments_cache = None
         self.instruments_cache_time = None
     
-    def authenticate(self, totp_code: str = None) -> bool:
-        """Authenticate with Angel One API."""
-        try:
-            print("🔐 Authenticating with Angel One API...")
-            
-            # Generate TOTP if not provided
-            if not totp_code:
-                totp_code = pyotp.TOTP(self.totp_secret).now()
-                print(f"✅ TOTP generated: {totp_code}")
-            
-            # Prepare login payload
-            login_payload = {
-                "clientcode": self.client_code,
-                "password": self.client_pin,
-                "totp": totp_code
-            }
-            
-            # Use the working headers from MyOwnAngleLogin.py
-            headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "X-UserType": "USER",
-                "X-SourceID": "WEB",
-                "X-ClientLocalIP": "127.0.0.1",
-                "X-ClientPublicIP": "127.0.0.1",
-                "X-MACAddress": "XX:XX:XX:XX:XX:XX",
-                "X-PrivateKey": self.api_key
-            }
-            
-            # Use the working login URL
-            login_url = "https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/loginByPassword"
-            
-            response = requests.post(
-                login_url,
-                json=login_payload,  # Use json parameter instead of data
-                headers=headers,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") == True:  # Use "status" instead of "success"
-                    self.jwt_token = data["data"]["jwtToken"]
-                    self.refresh_token = data["data"]["refreshToken"]
-                    print("✅ Authentication successful!")
-                    print(f"   JWT Token: {self.jwt_token[:20]}...")
-                    return True
-                else:
-                    error_code = data.get("errorCode", "Unknown")
-                    error_msg = data.get("message", "Unknown error")
-                    print(f"❌ Authentication failed: {error_msg} (Code: {error_code})")
-                    return False
-            else:
-                print(f"❌ Authentication failed with status code: {response.status_code}")
-                return False
+    def authenticate(self, totp_code: str = None, max_retries: int = 3) -> bool:
+        """Authenticate with Angel One API with retry logic."""
+        for attempt in range(max_retries):
+            try:
+                print(f"🔐 Authenticating with Angel One API... (Attempt {attempt + 1}/{max_retries})")
                 
-        except Exception as e:
-            print(f"❌ Authentication error: {e}")
-            return False
+                # Generate TOTP if not provided
+                if not totp_code:
+                    totp_code = pyotp.TOTP(self.totp_secret).now()
+                    print(f"✅ TOTP generated: {totp_code}")
+                
+                # Prepare login payload
+                login_payload = {
+                    "clientcode": self.client_code,
+                    "password": self.client_pin,
+                    "totp": totp_code
+                }
+                
+                # Use the working headers from MyOwnAngleLogin.py
+                headers = {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "X-UserType": "USER",
+                    "X-SourceID": "WEB",
+                    "X-ClientLocalIP": "127.0.0.1",
+                    "X-ClientPublicIP": "127.0.0.1",
+                    "X-MACAddress": "XX:XX:XX:XX:XX:XX",
+                    "X-PrivateKey": self.api_key
+                }
+                
+                # Use the working login URL
+                login_url = "https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/loginByPassword"
+                
+                response = requests.post(
+                    login_url,
+                    json=login_payload,  # Use json parameter instead of data
+                    headers=headers,
+                    timeout=30  # Increased timeout from 10 to 30 seconds
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("status") == True:  # Use "status" instead of "success"
+                        self.jwt_token = data["data"]["jwtToken"]
+                        self.refresh_token = data["data"]["refreshToken"]
+                        print("✅ Authentication successful!")
+                        print(f"   JWT Token: {self.jwt_token[:20]}...")
+                        return True
+                    else:
+                        error_code = data.get("errorCode", "Unknown")
+                        error_msg = data.get("message", "Unknown error")
+                        print(f"❌ Authentication failed: {error_msg} (Code: {error_code})")
+                        if attempt < max_retries - 1:
+                            print(f"🔄 Retrying in 2 seconds...")
+                            time.sleep(2)
+                            continue
+                        return False
+                else:
+                    print(f"❌ Authentication failed with status code: {response.status_code}")
+                    if attempt < max_retries - 1:
+                        print(f"🔄 Retrying in 2 seconds...")
+                        time.sleep(2)
+                        continue
+                    return False
+                    
+            except Exception as e:
+                print(f"❌ Authentication error (Attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    print(f"🔄 Retrying in 2 seconds...")
+                    time.sleep(2)
+                    continue
+                return False
+        
+        return False
     
     def get_instruments(self, force_refresh: bool = False) -> pd.DataFrame:
         """Get instruments list with caching."""
@@ -144,6 +159,58 @@ class AngelOneDataDownloader:
                 return self.instruments_cache
             raise
     
+    def get_symbol_info(self, symbol_name: str, exchange: str = "NSE") -> dict:
+        """Get symbol info (token and exchange) for a given symbol using enhanced master data lookup."""
+        try:
+            # First try enhanced lookup with master data
+            stock_info = self._get_stock_info_from_master(symbol_name)
+            if stock_info:
+                print(f"✅ Found Symbol: {symbol_name}")
+                print(f"   Token: {stock_info['token']}")
+                print(f"   Exchange: {stock_info['exchange']}")
+                print(f"   Name: {stock_info['name']}")
+                
+                # Check if the found exchange matches the requested exchange
+                if stock_info['exchange'] != exchange:
+                    print(f"⚠️ Exchange mismatch: Requested {exchange}, but symbol is on {stock_info['exchange']}")
+                    print(f"🔄 Using {stock_info['exchange']} exchange for {symbol_name}")
+                
+                return {
+                    'token': stock_info['token'],
+                    'exchange': stock_info['exchange'],
+                    'name': stock_info['name']
+                }
+            
+            # Fallback to original method
+            print(f"⚠️ Enhanced lookup failed for {symbol_name}, trying original method...")
+            df = self.get_instruments()
+            
+            # Filter by exchange and symbol (using contains like in working code)
+            df_filtered = df[
+                (df["exch_seg"] == exchange) & 
+                (df["symbol"].str.upper().str.contains(symbol_name.upper()))
+            ]
+            
+            if df_filtered.empty:
+                raise Exception(f"❌ Symbol {symbol_name} not found in {exchange} instruments list!")
+            
+            symbol_token = df_filtered.iloc[0]["token"]
+            symbol_info = df_filtered.iloc[0]
+            
+            print(f"✅ Found Symbol: {symbol_name}")
+            print(f"   Token: {symbol_token}")
+            print(f"   Exchange: {symbol_info['exch_seg']}")
+            
+            return {
+                'token': symbol_token,
+                'exchange': symbol_info['exch_seg'],
+                'name': symbol_info['symbol']
+            }
+            
+        except Exception as e:
+            print(f"❌ Error getting symbol info for {symbol_name}: {e}")
+            return None
+    
     def get_symbol_token(self, symbol_name: str, exchange: str = "NSE") -> str:
         """Get symbol token for a given symbol and exchange using enhanced master data lookup."""
         try:
@@ -154,6 +221,15 @@ class AngelOneDataDownloader:
                 print(f"   Token: {stock_info['token']}")
                 print(f"   Exchange: {stock_info['exchange']}")
                 print(f"   Name: {stock_info['name']}")
+                
+                # Check if the found exchange matches the requested exchange
+                if stock_info['exchange'] != exchange:
+                    print(f"⚠️ Exchange mismatch: Requested {exchange}, but symbol is on {stock_info['exchange']}")
+                    print(f"🔄 Using {stock_info['exchange']} exchange for {symbol_name}")
+                    # Update the exchange in the calling context
+                    # Note: This is a limitation - we can't modify the caller's exchange parameter
+                    # The caller should use the returned exchange information
+                
                 return stock_info['token']
             
             # Fallback to original method
@@ -464,29 +540,40 @@ class AngelOneDataDownloader:
                 if not self.authenticate():
                     raise Exception("Authentication failed")
             
-            # Get symbol token
-            symbol_token = self.get_symbol_token(symbol_name, exchange)
+            # Get symbol info (token and correct exchange)
+            symbol_info = self.get_symbol_info(symbol_name, exchange)
+            if not symbol_info:
+                raise Exception(f"Symbol info not found for {symbol_name}")
+            
+            symbol_token = symbol_info['token']
+            actual_exchange = symbol_info['exchange']
+            
+            # Use the actual exchange where the symbol is listed
+            if actual_exchange != exchange:
+                print(f"🔄 Using {actual_exchange} exchange (symbol not available on {exchange})")
+                exchange = actual_exchange
             
             # Map interval to Angel One format if needed
             interval_mapping = self.config.get_interval_mapping()
             angel_interval = interval_mapping.get(interval, interval)
             
-            # Set default dates if not provided
+            # Set default dates if not provided (using Angel One API format: yyyy-MM-dd hh:mm)
             if not from_date:
                 from_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d %H:%M')
             if not to_date:
-                to_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+                # Use yesterday as to_date to avoid future date issues
+                to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M')
             
-            # Optimize days_back based on interval and max limits
+            # Optimize days_back based on official Angel One API documentation
             max_days_by_interval = {
-                'ONE_MINUTE': 30,
-                'THREE_MINUTE': 60,
-                'FIVE_MINUTE': 100,
-                'TEN_MINUTE': 100,
-                'FIFTEEN_MINUTE': 200,
-                'THIRTY_MINUTE': 200,
-                'ONE_HOUR': 400,
-                'ONE_DAY': 2000
+                'ONE_MINUTE': 30,      # Max 30 days for 1-minute data
+                'THREE_MINUTE': 60,    # Max 60 days for 3-minute data
+                'FIVE_MINUTE': 100,    # Max 100 days for 5-minute data
+                'TEN_MINUTE': 100,     # Max 100 days for 10-minute data
+                'FIFTEEN_MINUTE': 200, # Max 200 days for 15-minute data
+                'THIRTY_MINUTE': 200,  # Max 200 days for 30-minute data
+                'ONE_HOUR': 400,       # Max 400 days for 1-hour data
+                'ONE_DAY': 2000        # Max 2000 days for daily data
             }
             
             max_days = max_days_by_interval.get(angel_interval, 30)
@@ -494,8 +581,10 @@ class AngelOneDataDownloader:
                 print(f"⚠️ Requested {days_back} days, but max for {angel_interval} is {max_days}. Using {max_days} days.")
                 days_back = max_days
                 from_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d %H:%M')
+                # Also update to_date to yesterday when recalculating
+                to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M')
             
-            # Prepare historical data payload
+            # Prepare historical data payload according to official documentation
             candle_payload = {
                 "exchange": exchange,
                 "symboltoken": symbol_token,
@@ -504,17 +593,17 @@ class AngelOneDataDownloader:
                 "todate": to_date
             }
             
-            # Prepare headers with JWT token (using working format)
+            # Prepare headers according to official Angel One API documentation (Python example)
             headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "X-UserType": "USER",
-                "X-SourceID": "WEB",
-                "X-ClientLocalIP": "127.0.0.1",
-                "X-ClientPublicIP": "127.0.0.1",
-                "X-MACAddress": "XX:XX:XX:XX:XX:XX",
-                "X-PrivateKey": self.api_key,
-                "Authorization": f"Bearer {self.jwt_token}"
+                'X-PrivateKey': self.api_key,
+                'Accept': 'application/json',
+                'X-SourceID': 'WEB',
+                'X-ClientLocalIP': '127.0.0.1',
+                'X-ClientPublicIP': '127.0.0.1',
+                'X-MACAddress': 'XX:XX:XX:XX:XX:XX',
+                'X-UserType': 'USER',
+                'Authorization': f'Bearer {self.jwt_token}',
+                'Content-Type': 'application/json'
             }
             
             # Make historical data request (using correct Angel One endpoint)
@@ -561,10 +650,13 @@ class AngelOneDataDownloader:
                     return df_candles
                 else:
                     error_msg = data.get("message", "Unknown error")
-                    print(f"❌ Historical data failed: {error_msg}")
+                    error_code = data.get("errorcode", "Unknown")
+                    print(f"❌ Historical data failed: {error_msg} (Code: {error_code})")
+                    print(f"🔍 Full response: {data}")
                     return pd.DataFrame()
             else:
                 print(f"❌ Historical data failed with status code: {response.status_code}")
+                print(f"🔍 Response content: {response.text}")
                 return pd.DataFrame()
                 
         except Exception as e:

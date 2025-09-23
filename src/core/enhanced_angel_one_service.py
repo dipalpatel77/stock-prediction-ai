@@ -420,6 +420,41 @@ class EnhancedAngelOneService:
         except Exception as e:
             self.logger.error(f"❌ Error cleaning data: {e}")
             return df
+    
+    def test_connection(self) -> bool:
+        """
+        Test Angel One API connection
+        
+        Returns:
+            bool: True if connection successful, False otherwise
+        """
+        try:
+            # Test with a simple API call
+            result = self.downloader.get_historical_data("RELIANCE", "ONE_DAY", 1, "NSE")
+            return result is not None and not result.empty
+        except Exception as e:
+            self.logger.error(f"Angel One connection test failed: {e}")
+            return False
+    
+    def get_historical_data(self, symbol: str, interval: str = "ONE_DAY", 
+                          days: int = None, exchange: str = "NSE") -> Optional[pd.DataFrame]:
+        """
+        Get historical data for a symbol
+        
+        Args:
+            symbol: Stock symbol
+            interval: Data interval
+            days: Number of days
+            exchange: Exchange name
+            
+        Returns:
+            DataFrame with historical data
+        """
+        try:
+            return self.get_optimal_historical_data(symbol, exchange, interval, days)
+        except Exception as e:
+            self.logger.error(f"Error getting historical data: {e}")
+            return None
 
 def main():
     """Test the enhanced Angel One service."""

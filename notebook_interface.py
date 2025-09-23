@@ -11,7 +11,7 @@ sys.path.insert(0, '.')
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from main.unified_analysis_pipeline import UnifiedAnalysisPipeline
+from main.pipeline.core_pipeline import UnifiedAnalysisPipeline
 
 class StockAnalysisNotebook:
     """Interactive notebook interface for stock analysis"""

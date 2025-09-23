@@ -1,0 +1,33 @@
+
+🚀 COMPREHENSIVE INTEGRATION TEST REPORT
+============================================================
+Generated at: 2025-09-18 21:25:54
+Total execution time: 19.94 seconds
+
+📊 TEST RESULTS SUMMARY
+============================================================
+Angel One API Integration           ✅ PASSED
+Database Integration                ✅ PASSED
+Service Coordination                ✅ PASSED
+API Rate Limiting                   ❌ FAILED
+Fallback Mechanisms                 ✅ PASSED
+Performance Benchmarks              ✅ PASSED
+End-to-End Pipeline                 ✅ PASSED
+Data Processing Integration         ✅ PASSED
+Model Training Integration          ❌ FAILED
+Prediction Integration              ✅ PASSED
+User Interface Integration          ✅ PASSED
+Success Metrics Validation          ✅ PASSED
+
+Overall Success Rate: 10/12 (83.3%)
+
+⚡ PERFORMANCE METRICS
+============================================================
+Service Initialization         0.000s
+Data Processor Init            0.063s
+Model Trainer Init             0.001s
+Total Initialization           0.064s
+
+🎯 SYSTEM HEALTH ASSESSMENT
+============================================================
+🟡 GOOD: System is functional with minor issues to address

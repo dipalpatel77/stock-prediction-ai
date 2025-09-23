@@ -8,6 +8,7 @@ import mysql.connector
 from datetime import datetime
 from typing import Dict, List, Optional
 import logging
+import pandas as pd
 
 class AngelOneDatabaseSchema:
     """
@@ -233,6 +234,129 @@ class AngelOneDatabaseSchema:
         except Exception as e:
             self.logger.error(f"❌ Error getting data quality metrics: {e}")
             return {}
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
+    def store_stock_data(self, ticker: str, data: pd.DataFrame, interval: str = 'ONE_DAY', exchange: str = 'NSE') -> bool:
+        """
+        Store stock data in Angel One database schema
+        
+        Args:
+            ticker: Stock ticker symbol
+            data: Stock data DataFrame
+            interval: Data interval
+            exchange: Exchange (NSE/BSE)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if data.empty:
+                self.logger.warning(f"No data to store for {ticker}")
+                return False
+            
+            conn = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="7874",
+                database="stock_data"
+            )
+            cursor = conn.cursor()
+            
+            # Prepare data for insertion
+            data_to_insert = []
+            for _, row in data.iterrows():
+                data_to_insert.append((
+                    ticker,
+                    exchange,
+                    row.get('symbol_token', ''),
+                    row.name,  # date index
+                    float(row['Open']),
+                    float(row['High']),
+                    float(row['Low']),
+                    float(row['Close']),
+                    int(row['Volume']),
+                    interval,
+                    'angel_one'
+                ))
+            
+            # Insert data with conflict resolution
+            insert_query = """
+                INSERT INTO angel_one_stock_data 
+                (ticker, exchange, symbol_token, date, open, high, low, close, volume, interval_type, data_source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                open = VALUES(open),
+                high = VALUES(high),
+                low = VALUES(low),
+                close = VALUES(close),
+                volume = VALUES(volume),
+                updated_at = CURRENT_TIMESTAMP
+            """
+            
+            cursor.executemany(insert_query, data_to_insert)
+            conn.commit()
+            
+            self.logger.info(f"✅ Stored {len(data_to_insert)} records for {ticker} in Angel One schema")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error storing stock data for {ticker}: {e}")
+            return False
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
+    def get_stock_data(self, ticker: str, interval: str = 'ONE_DAY', days: int = 30, exchange: str = 'NSE') -> Optional[pd.DataFrame]:
+        """
+        Get stock data from Angel One database schema
+        
+        Args:
+            ticker: Stock ticker symbol
+            interval: Data interval
+            days: Number of days to retrieve
+            exchange: Exchange (NSE/BSE)
+            
+        Returns:
+            DataFrame with stock data or None if not found
+        """
+        try:
+            conn = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="7874",
+                database="stock_data"
+            )
+            cursor = conn.cursor()
+            
+            # Get data from database
+            query = """
+                SELECT date, open, high, low, close, volume, symbol_token, interval_type, data_source
+                FROM angel_one_stock_data 
+                WHERE ticker = %s AND exchange = %s AND interval_type = %s
+                AND date >= DATE_SUB(NOW(), INTERVAL %s DAY)
+                ORDER BY date ASC
+            """
+            
+            cursor.execute(query, (ticker, exchange, interval, days))
+            results = cursor.fetchall()
+            
+            if not results:
+                self.logger.warning(f"No data found for {ticker} in Angel One schema")
+                return None
+            
+            # Convert to DataFrame
+            columns = ['date', 'open', 'high', 'low', 'close', 'volume', 'symbol_token', 'interval_type', 'data_source']
+            df = pd.DataFrame(results, columns=columns)
+            df.set_index('date', inplace=True)
+            
+            self.logger.info(f"✅ Retrieved {len(df)} records for {ticker} from Angel One schema")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error getting stock data for {ticker}: {e}")
+            return None
         finally:
             if 'conn' in locals():
                 conn.close()

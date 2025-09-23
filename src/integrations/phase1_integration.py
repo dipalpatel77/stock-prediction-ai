@@ -43,11 +43,10 @@ class Phase1Integration:
     
     def __init__(self):
         """Initialize Phase 1 integration service"""
-        self.fundamental_analyzer = FundamentalAnalyzer()
         self.global_market_service = GlobalMarketService()
-        self.institutional_analyzer = InstitutionalFlowAnalyzer()
         self.data_service = DataService()
         self.strategy_service = StrategyService()
+        self.currency_service = CurrencyService()
         
         logger.info("Phase 1 Integration Service initialized")
     
@@ -64,14 +63,14 @@ class Phase1Integration:
         try:
             logger.info(f"Starting comprehensive Phase 1 analysis for {ticker}")
             
-            # Get fundamental metrics
-            fundamental_metrics = self.fundamental_analyzer.get_fundamental_metrics(ticker)
+            # Get fundamental metrics (placeholder implementation)
+            fundamental_metrics = self._get_fundamental_metrics_placeholder(ticker)
             
             # Get global market data
             global_market_data = self.global_market_service.get_global_market_data()
             
-            # Get institutional flows
-            institutional_flows = self.institutional_analyzer.get_institutional_flows(ticker)
+            # Get institutional flows (placeholder implementation)
+            institutional_flows = self._get_institutional_flows_placeholder(ticker)
             
             # Get market impact score
             market_impact_score = self.global_market_service.get_market_impact_score(ticker)
@@ -370,9 +369,9 @@ class Phase1Integration:
             logger.info(f"Phase 1 analysis saved to {filename}")
             
             # Save individual component data
-            self.fundamental_analyzer.save_fundamental_data(ticker)
+            # self.fundamental_analyzer.save_fundamental_data(ticker)  # Placeholder - analyzer not available
             self.global_market_service.save_global_market_data()
-            self.institutional_analyzer.save_institutional_data(ticker)
+            # self.institutional_analyzer.save_institutional_data(ticker)  # Placeholder - analyzer not available
             
         except Exception as e:
             logger.error(f"Error saving Phase 1 analysis: {str(e)}")
@@ -460,6 +459,43 @@ Current Coverage: {analysis['variable_coverage']['overall_coverage']}
         except Exception as e:
             logger.error(f"Error generating Phase 1 report: {str(e)}")
             return f"Error generating report for {ticker}: {str(e)}"
+    
+    def _get_fundamental_metrics_placeholder(self, ticker: str) -> Any:
+        """Placeholder method for fundamental metrics (analyzer not available)."""
+        class FundamentalMetrics:
+            def __init__(self):
+                self.eps = 0.0
+                self.eps_growth = 0.0
+                self.net_profit_margin = 0.0
+                self.revenue_growth = 0.0
+                self.dividend_yield = 0.0
+                self.dividend_announcement = "No recent announcements"
+                self.debt_to_equity = 0.0
+                self.current_ratio = 0.0
+                self.roe = 0.0
+                self.roa = 0.0
+                self.pe_ratio = 0.0
+                self.pb_ratio = 0.0
+                self.financial_health_score = 50.0
+        
+        logger.warning(f"Using placeholder fundamental metrics for {ticker}")
+        return FundamentalMetrics()
+    
+    def _get_institutional_flows_placeholder(self, ticker: str) -> Any:
+        """Placeholder method for institutional flows (analyzer not available)."""
+        class InstitutionalFlows:
+            def __init__(self):
+                self.fii_net_flow = 0.0
+                self.dii_net_flow = 0.0
+                self.fii_flow_trend = "Neutral"
+                self.dii_flow_trend = "Neutral"
+                self.institutional_sentiment = "Neutral"
+                self.analyst_rating_change = "No change"
+                self.analyst_consensus = "Hold"
+                self.institutional_confidence = 50.0
+        
+        logger.warning(f"Using placeholder institutional flows for {ticker}")
+        return InstitutionalFlows()
 
 # Example usage and testing
 if __name__ == "__main__":

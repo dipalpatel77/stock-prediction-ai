@@ -122,6 +122,57 @@ class CurrencyService:
         
         logger.info("Currency Service initialized")
     
+    def get_currency_data(self, base_currency: str = 'USD') -> Dict[str, Any]:
+        """
+        Get comprehensive currency data for a base currency.
+        
+        Args:
+            base_currency: Base currency for exchange rates
+            
+        Returns:
+            Dictionary with currency data
+        """
+        try:
+            # Get exchange rates for major currencies
+            major_currencies = ['USD', 'INR', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY']
+            currency_data = {}
+            
+            for currency in major_currencies:
+                if currency != base_currency:
+                    rate = self.get_exchange_rate(base_currency, currency)
+                    if rate:
+                        currency_data[currency] = {
+                            'rate': rate.rate,
+                            'timestamp': rate.timestamp,
+                            'source': rate.source
+                        }
+            
+            # Calculate currency strength index
+            strength_index = self._calculate_currency_strength(base_currency)
+            
+            # Get market sentiment
+            sentiment = self._get_currency_sentiment(base_currency)
+            
+            return {
+                'base_currency': base_currency,
+                'exchange_rates': currency_data,
+                'currency_strength': strength_index,
+                'market_sentiment': sentiment,
+                'last_updated': datetime.now(),
+                'data_source': 'currency_service'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting currency data: {e}")
+            return {
+                'base_currency': base_currency,
+                'exchange_rates': {},
+                'currency_strength': 50.0,
+                'market_sentiment': 'neutral',
+                'last_updated': datetime.now(),
+                'data_source': 'fallback'
+            }
+    
     def get_exchange_rate(self, from_currency: str, to_currency: str, 
                          use_cache: bool = True) -> ExchangeRate:
         """
@@ -456,6 +507,41 @@ class CurrencyService:
                 'total_pairs': 0,
                 'error': str(e)
             }
+    
+    def _calculate_currency_strength(self, base_currency: str) -> float:
+        """Calculate currency strength index (0-100)"""
+        try:
+            # Simple strength calculation based on major pairs
+            major_pairs = ['EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF']
+            strength_scores = []
+            
+            for currency in major_pairs:
+                if currency != base_currency:
+                    rate = self.get_exchange_rate(base_currency, currency)
+                    if rate and rate.rate > 0:
+                        # Higher rate = stronger base currency
+                        strength_scores.append(min(100, rate.rate * 10))
+            
+            return sum(strength_scores) / len(strength_scores) if strength_scores else 50.0
+            
+        except Exception:
+            return 50.0
+    
+    def _get_currency_sentiment(self, base_currency: str) -> str:
+        """Get currency market sentiment"""
+        try:
+            # Simple sentiment based on recent rate changes
+            strength = self._calculate_currency_strength(base_currency)
+            
+            if strength > 70:
+                return 'bullish'
+            elif strength < 30:
+                return 'bearish'
+            else:
+                return 'neutral'
+                
+        except Exception:
+            return 'neutral'
 
 # Example usage and testing
 if __name__ == "__main__":

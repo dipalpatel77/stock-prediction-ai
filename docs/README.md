@@ -13,7 +13,8 @@ Welcome to the AI Stock Predictor documentation! This comprehensive system provi
 ### 🔧 Technical Documentation
 
 - **[Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md)** - Common issues and solutions
-- **[Database Implementation Guide](../DATABASE_IMPLEMENTATION_GUIDE.md)** - Database setup and management
+- **[Database Implementation Guide](DATABASE_IMPLEMENTATION_GUIDE.md)** - Database setup and management
+- **[Interval-Specific Storage Guide](INTERVAL_SPECIFIC_STORAGE_GUIDE.md)** - Advanced storage system for different trading strategies
 - **[Angel One Optimization Summary](../ANGEL_ONE_OPTIMIZATION_SUMMARY.md)** - Angel One API integration details
 
 ### 📊 System Features
@@ -23,7 +24,7 @@ Welcome to the AI Stock Predictor documentation! This comprehensive system provi
 - **Multi-source Data Integration**: Angel One (Indian stocks) + Yahoo Finance (US stocks)
 - **Advanced ML Algorithms**: 15+ machine learning models for predictions
 - **Multi-timeframe Analysis**: Short-term (1-7 days), Medium-term (1-4 weeks), Long-term (1-12 months)
-- **Database Storage**: MySQL integration for efficient data management
+- **Database Storage**: MySQL integration with interval-specific tables for optimized performance
 - **Real-time Updates**: Incremental data updates and smart caching
 
 #### 🔬 Analysis Types

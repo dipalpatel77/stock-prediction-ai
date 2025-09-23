@@ -847,13 +847,17 @@ class DataService:
             
             print(f"✅ Found '{base_ticker}' in Angel One: Token={symbol_info['token']}, Exchange={symbol_info['exchange']}")
             
+            # Convert period to days_back for Angel One API
+            days_back = self._convert_period_to_days(period)
+            print(f"📅 Requesting {days_back} days of data for period: {period}")
+            
             # Download data using the symbol info from mapper
-            # Use maximum days for better historical data (up to 2000 days for daily data)
+            # Use the converted days_back for maximum historical data
             df = angel_downloader.get_historical_data(
                 symbol_name=base_ticker,
                 exchange=symbol_info['exchange'],
                 interval=interval,
-                days_back=365  # Use 1 year for comprehensive data
+                days_back=days_back  # Use converted days_back from period
             )
             
             if df is not None and not df.empty:
@@ -890,6 +894,32 @@ class DataService:
             print(f"❌ Error getting current price from yfinance for {ticker}: {e}")
             return None
     
+    def _convert_period_to_days(self, period: str) -> int:
+        """
+        Convert period string to days for Angel One API
+        
+        Args:
+            period: Period string (e.g., '1y', '6mo', '3mo', '5y')
+            
+        Returns:
+            Number of days
+        """
+        period_mapping = {
+            '1d': 1,
+            '5d': 5,
+            '1mo': 30,
+            '3mo': 90,
+            '6mo': 180,
+            '1y': 365,
+            '2y': 730,
+            '5y': 1825,
+            '10y': 3650,
+            'ytd': 365,
+            'max': 2000  # Angel One max limit for ONE_DAY
+        }
+        
+        return period_mapping.get(period.lower(), 365)  # Default to 1 year
+
     def _get_current_price_from_angel_one(self, ticker: str) -> Optional[float]:
         """Get current price from Angel One API."""
         try:

@@ -81,6 +81,68 @@ class GeopoliticalRiskService:
             'utilities': ['political_instability', 'regulatory_changes']
         }
     
+    def get_geopolitical_risk(self, days_back: int = 30) -> GeopoliticalRisk:
+        """
+        Get comprehensive geopolitical risk assessment.
+        
+        Args:
+            days_back: Number of days to analyze
+            
+        Returns:
+            GeopoliticalRisk object with risk assessment
+        """
+        try:
+            events = self.get_geopolitical_events(days_back)
+            
+            # Calculate overall risk score
+            overall_risk = sum(event.impact_score for event in events) / max(len(events), 1)
+            
+            # Calculate regional risks
+            regional_risks = defaultdict(float)
+            for event in events:
+                regional_risks[event.region] += event.impact_score
+            regional_risks = dict(regional_risks)
+            
+            # Calculate sector risks
+            sector_risks = defaultdict(float)
+            for event in events:
+                for sector in event.affected_sectors:
+                    sector_risks[sector] += event.impact_score
+            sector_risks = dict(sector_risks)
+            
+            # Get high impact events
+            high_impact_events = [event for event in events if event.impact_score > 70]
+            
+            # Calculate market sentiment impact
+            sentiment_impact = min(100, overall_risk * 0.8)
+            
+            # Calculate volatility forecast
+            volatility_forecast = min(50, overall_risk * 0.5)
+            
+            return GeopoliticalRisk(
+                overall_risk_score=overall_risk,
+                regional_risks=regional_risks,
+                sector_risks=sector_risks,
+                event_count=len(events),
+                high_impact_events=high_impact_events,
+                risk_factors=[event.event_type for event in events],
+                market_sentiment_impact=sentiment_impact,
+                volatility_forecast=volatility_forecast
+            )
+            
+        except Exception as e:
+            # Return default risk assessment
+            return GeopoliticalRisk(
+                overall_risk_score=30.0,
+                regional_risks={'Global': 30.0},
+                sector_risks={'General': 30.0},
+                event_count=0,
+                high_impact_events=[],
+                risk_factors=['Unknown'],
+                market_sentiment_impact=25.0,
+                volatility_forecast=15.0
+            )
+    
     def get_geopolitical_events(self, days_back: int = 30) -> List[GeopoliticalEvent]:
         """
         Get recent geopolitical events.

@@ -1,0 +1,5 @@
+---
+description: Whenever you create a doc store it inside the docs folder.
+globs:
+alwaysApply: true
+---

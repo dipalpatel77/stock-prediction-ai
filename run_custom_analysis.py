@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.insert(0, '.')
 
-from main.unified_analysis_pipeline import UnifiedAnalysisPipeline
+from main.pipeline.core_pipeline import UnifiedAnalysisPipeline
 
 def run_quick_analysis(ticker, period='1mo', days_ahead=5):
     """Run a quick analysis for testing"""

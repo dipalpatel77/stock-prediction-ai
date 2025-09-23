@@ -1,0 +1,37 @@
+{
+  "summary": {
+    "total_errors": 1,
+    "recent_errors": 1,
+    "categories": {
+      "data": 1
+    },
+    "severities": {
+      "low": 1
+    },
+    "last_error": {
+      "timestamp": "2025-09-19T18:20:51.884192",
+      "error_type": "ValueError",
+      "error_message": "Test",
+      "category": "data",
+      "severity": "low",
+      "context": {
+        "test": "context"
+      },
+      "traceback": "NoneType: None\n"
+    }
+  },
+  "error_history": [
+    {
+      "timestamp": "2025-09-19T18:20:51.884192",
+      "error_type": "ValueError",
+      "error_message": "Test",
+      "category": "data",
+      "severity": "low",
+      "context": {
+        "test": "context"
+      },
+      "traceback": "NoneType: None\n"
+    }
+  ],
+  "exported_at": "2025-09-19T18:20:51.885227"
+}

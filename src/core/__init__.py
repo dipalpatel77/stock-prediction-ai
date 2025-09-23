@@ -9,7 +9,7 @@ from .report_generator import ComprehensiveReportGenerator
 from .reporting_service import ReportingService
 from .database_service import DatabaseService
 from .incremental_data_service import IncrementalDataService
-from .economic_data_service import EconomicDataService
+# from .economic_data_service import EconomicDataService  # Moved to main/services
 from .currency_service import CurrencyService
 from .global_market_service import GlobalMarketService
 from .geopolitical_risk_service import GeopoliticalRiskService
@@ -26,7 +26,7 @@ __all__ = [
     'ReportingService',
     'DatabaseService',
     'IncrementalDataService',
-    'EconomicDataService',
+    # 'EconomicDataService',  # Moved to main/services
     'CurrencyService',
     'GlobalMarketService',
     'GeopoliticalRiskService',

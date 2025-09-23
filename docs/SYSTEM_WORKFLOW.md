@@ -581,6 +581,63 @@ reports/
 
 ### **Database Storage**
 
+#### **Interval-Specific Storage System (NEW)**
+
+The system now uses **interval-specific tables** optimized for different trading strategies:
+
+```python
+# Automatic routing to appropriate table based on interval
+from src.core.interval_specific_storage import IntervalSpecificStorage
+
+storage = IntervalSpecificStorage()
+storage.store_data_by_interval(
+    df=dataframe,
+    ticker='RELIANCE',
+    exchange='NSE',
+    interval='FIVE_MINUTE',  # Automatically goes to intraday_5min table
+    symbol_token='500325'
+)
+```
+
+#### **Table Structure:**
+
+| **Interval** | **Table**        | **Use Case**                                         |
+| ------------ | ---------------- | ---------------------------------------------------- |
+| 1-minute     | `intraday_1min`  | High-frequency trading, scalping                     |
+| 5-minute     | `intraday_5min`  | Day trading, swing trading                           |
+| 15-minute    | `intraday_15min` | Position trading, trend analysis                     |
+| 30-minute    | `intraday_30min` | Trend following, technical analysis                  |
+| 1-hour       | `hourly_data`    | Portfolio management, risk assessment                |
+| 1-day        | `daily_data`     | Fundamental analysis, long-term investing            |
+| Weekly       | `weekly_data`    | Trend analysis, performance metrics (auto-generated) |
+| Monthly      | `monthly_data`   | Annual analysis, market cycles (auto-generated)      |
+
+#### **Query Examples:**
+
+```sql
+-- High-frequency trading (1-minute data)
+SELECT * FROM intraday_1min
+WHERE ticker='RELIANCE'
+AND datetime >= NOW() - INTERVAL 1 HOUR;
+
+-- Day trading (5-minute data)
+SELECT * FROM intraday_5min
+WHERE ticker='RELIANCE'
+AND DATE(datetime) = CURDATE();
+
+-- Long-term analysis (Daily data)
+SELECT * FROM daily_data
+WHERE ticker='RELIANCE'
+AND date >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR);
+
+-- Performance analysis (Weekly aggregates)
+SELECT price_change_pct FROM weekly_data
+WHERE ticker='RELIANCE'
+ORDER BY week_start_date DESC LIMIT 52;
+```
+
+#### **Legacy Storage (Still Supported):**
+
 ```sql
 -- Stock data storage
 INSERT INTO stock_data (ticker, date, open, high, low, close, volume, data_source)

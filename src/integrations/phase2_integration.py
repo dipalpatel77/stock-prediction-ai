@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Phase 2 Integration Module
@@ -23,7 +24,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Import Phase 2 modules
-from src.core.economic_data_service import EconomicDataService
+from main.services.economic_data_service import EconomicDataService
 # Note: These modules have been moved to core/ or analysis_modules/
 # from src.core.data_service import DataService
 from src.core.global_market_service import GlobalMarketService
@@ -60,8 +61,6 @@ class Phase2Integration:
     def __init__(self):
         """Initialize Phase 2 integration service"""
         self.economic_service = EconomicDataService()
-        self.institutional_analyzer = InstitutionalFlowAnalyzer()
-        self.fundamental_analyzer = FundamentalAnalyzer()
         self.global_market_service = GlobalMarketService()
         
         # Phase 2 configuration
@@ -113,7 +112,7 @@ class Phase2Integration:
             regulatory_risk = self._analyze_regulatory_risk(ticker)
             
             # 5. Enhanced Institutional Analysis
-            institutional_data = self.institutional_analyzer.get_institutional_flows(ticker)
+            institutional_data = self._get_institutional_flows_placeholder(ticker)
             institutional_confidence = institutional_data.institutional_confidence
             
             # 6. Calculate Enhanced Prediction Score
@@ -427,6 +426,15 @@ class Phase2Integration:
                 'phase2_status': 'Failed',
                 'error': str(e)
             }
+    
+    def _get_institutional_flows_placeholder(self, ticker: str) -> Any:
+        """Placeholder method for institutional flows (analyzer not available)."""
+        class InstitutionalFlows:
+            def __init__(self):
+                self.institutional_confidence = 50.0
+        
+        logger.warning(f"Using placeholder institutional flows for {ticker}")
+        return InstitutionalFlows()
 
 # Example usage and testing
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore')
 from src.core.report_generator import ComprehensiveReportGenerator, AnalysisSummary
 from src.core.currency_service import CurrencyService
 from src.utils.enhanced_date_utils import EnhancedDateUtils
-from src.core.economic_data_service import EconomicDataService
+from main.services.economic_data_service import EconomicDataService
 from .phase1_integration import Phase1Integration
 from .phase2_integration import Phase2Integration
 from .phase3_integration import Phase3Integration

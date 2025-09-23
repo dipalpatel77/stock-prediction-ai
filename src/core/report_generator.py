@@ -24,7 +24,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Import analysis modules
-from src.core.economic_data_service import EconomicDataService
+# Economic data service removed
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

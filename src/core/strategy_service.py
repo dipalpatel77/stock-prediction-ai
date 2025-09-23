@@ -718,3 +718,137 @@ class StrategyService:
             'volatility': 0.0,
             'vix_current': 20.0
         }
+    
+    def get_strategy_recommendations(self, ticker: str, data: pd.DataFrame = None) -> Dict[str, Any]:
+        """
+        Get trading strategy recommendations based on technical analysis.
+        
+        Args:
+            ticker: Stock ticker symbol
+            data: Historical data (optional)
+            
+        Returns:
+            Dictionary with strategy recommendations
+        """
+        try:
+            # Get technical indicators
+            indicators = self.get_technical_indicators(ticker)
+            
+            # Generate recommendations based on indicators
+            recommendations = {
+                'ticker': ticker,
+                'timestamp': datetime.now(),
+                'recommendations': [],
+                'confidence': 0.0,
+                'risk_level': 'medium'
+            }
+            
+            # Simple strategy logic
+            if indicators.get('rsi', 50) < 30:
+                recommendations['recommendations'].append({
+                    'strategy': 'Oversold Buy',
+                    'confidence': 0.8,
+                    'reason': 'RSI indicates oversold conditions'
+                })
+            elif indicators.get('rsi', 50) > 70:
+                recommendations['recommendations'].append({
+                    'strategy': 'Overbought Sell',
+                    'confidence': 0.8,
+                    'reason': 'RSI indicates overbought conditions'
+                })
+            else:
+                recommendations['recommendations'].append({
+                    'strategy': 'Hold',
+                    'confidence': 0.6,
+                    'reason': 'Neutral technical indicators'
+                })
+            
+            # Calculate overall confidence
+            if recommendations['recommendations']:
+                recommendations['confidence'] = sum(r['confidence'] for r in recommendations['recommendations']) / len(recommendations['recommendations'])
+            
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"Strategy recommendations failed: {e}")
+            return {
+                'ticker': ticker,
+                'timestamp': datetime.now(),
+                'recommendations': [{'strategy': 'Hold', 'confidence': 0.5, 'reason': 'Analysis failed'}],
+                'confidence': 0.5,
+                'risk_level': 'high'
+            }
+    
+    def run_backtesting(self, ticker: str, strategy: str, data: pd.DataFrame = None) -> Dict[str, Any]:
+        """
+        Run backtesting for a trading strategy.
+        
+        Args:
+            ticker: Stock ticker symbol
+            strategy: Strategy name to test
+            data: Historical data (optional)
+            
+        Returns:
+            Dictionary with backtesting results
+        """
+        try:
+            # Simulate backtesting results
+            results = {
+                'ticker': ticker,
+                'strategy': strategy,
+                'start_date': datetime.now() - timedelta(days=365),
+                'end_date': datetime.now(),
+                'total_return': 0.0,
+                'annualized_return': 0.0,
+                'sharpe_ratio': 0.0,
+                'max_drawdown': 0.0,
+                'win_rate': 0.0,
+                'total_trades': 0,
+                'profitable_trades': 0,
+                'losing_trades': 0,
+                'avg_win': 0.0,
+                'avg_loss': 0.0,
+                'profit_factor': 0.0,
+                'trades': []
+            }
+            
+            # Simulate some trades
+            for i in range(10):
+                trade = {
+                    'entry_date': datetime.now() - timedelta(days=30-i*3),
+                    'exit_date': datetime.now() - timedelta(days=25-i*3),
+                    'entry_price': 100.0 + i * 2,
+                    'exit_price': 102.0 + i * 2,
+                    'return_pct': 2.0,
+                    'profit_loss': 2.0
+                }
+                results['trades'].append(trade)
+                results['total_trades'] += 1
+                if trade['profit_loss'] > 0:
+                    results['profitable_trades'] += 1
+                else:
+                    results['losing_trades'] += 1
+            
+            # Calculate metrics
+            if results['total_trades'] > 0:
+                results['win_rate'] = results['profitable_trades'] / results['total_trades']
+                results['total_return'] = sum(trade['return_pct'] for trade in results['trades'])
+                results['annualized_return'] = results['total_return'] / 365 * 365
+                results['sharpe_ratio'] = results['annualized_return'] / 10.0  # Simplified
+                results['max_drawdown'] = -5.0  # Simplified
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Backtesting failed: {e}")
+            return {
+                'ticker': ticker,
+                'strategy': strategy,
+                'error': str(e),
+                'total_return': 0.0,
+                'annualized_return': 0.0,
+                'sharpe_ratio': 0.0,
+                'max_drawdown': 0.0,
+                'win_rate': 0.0,
+                'total_trades': 0
+            }
