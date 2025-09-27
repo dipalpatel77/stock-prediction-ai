@@ -493,3 +493,54 @@ class CurrencyService:
         except Exception as e:
             self.logger.error(f"Error generating currency recommendations: {e}")
             return []
+    
+    def get_currency_data(self) -> Dict[str, Any]:
+        """Get currency data - compatibility method"""
+        try:
+            # Get major currency rates
+            major_currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD']
+            currency_rates = {}
+            
+            for currency in major_currencies:
+                if currency != 'USD':
+                    rate = self.get_exchange_rate('USD', currency)
+                    if rate:
+                        currency_rates[f'USD_{currency}'] = rate
+            
+            # Get currency trends
+            trends = self._get_currency_trends()
+            
+            # Get currency volatility
+            volatility = self.get_currency_volatility()
+            
+            return {
+                'currency_rates': currency_rates,
+                'trends': trends,
+                'volatility': volatility,
+                'timestamp': datetime.now().isoformat(),
+                'source': 'currency_service'
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting currency data: {e}")
+            return {
+                'currency_rates': {},
+                'trends': {},
+                'volatility': {},
+                'timestamp': datetime.now().isoformat(),
+                'source': 'placeholder',
+                'error': str(e)
+            }
+    
+    def _get_currency_trends(self) -> Dict[str, Any]:
+        """Get currency trends - placeholder method"""
+        try:
+            return {
+                'USD': {'trend': 'stable', 'strength': 0.5},
+                'EUR': {'trend': 'stable', 'strength': 0.4},
+                'GBP': {'trend': 'stable', 'strength': 0.3},
+                'JPY': {'trend': 'stable', 'strength': 0.6}
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting currency trends: {e}")
+            return {}

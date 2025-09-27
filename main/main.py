@@ -187,127 +187,115 @@ def main():
                         print(f"⚠️ Risk Level: {risk_level}")
                         print()
                 
-                # Display prediction results with comprehensive formatting (matching backup file)
+                # Display prediction results with comprehensive formatting (matching --quick mode)
                 if 'prediction_generator' in component_results:
                     prediction_result = component_results['prediction_generator']
                     if prediction_result.get('success'):
                         nested_result = prediction_result.get('result', {})
                         if nested_result.get('success'):
-                            print(console_formatter.format_header("🎯 COMPREHENSIVE PREDICTION RESULTS", 80))
+                            # Check if this is validation-based or multi-horizon prediction (new format)
+                            prediction_type = nested_result.get('prediction_type')
+                            if prediction_type in ['validation_based', 'multi_horizon']:
+                                # Use the new validation-based format
+                                formatted_output = nested_result.get('formatted_output', '')
+                                if formatted_output:
+                                    print(formatted_output)
+                                else:
+                                    print("🔮 Predictions: ✅ Generated")
+                            else:
+                                # Fallback to old format for compatibility
+                                print(console_formatter.format_header("🎯 COMPREHENSIVE PREDICTION RESULTS", 80))
+                                
+                                # Get actual prediction data from the pipeline
+                                predictions = nested_result.get('predictions', {})
+                                multi_day_predictions = nested_result.get('multi_day_predictions', [])
+                                timeframe_predictions = nested_result.get('timeframe_predictions', {})
+                                confidence_analysis = nested_result.get('confidence_analysis', {})
+                                trading_recommendations = nested_result.get('trading_recommendations', {})
                             
-                            # Get actual prediction data from the pipeline
-                            predictions = nested_result.get('predictions', {})
-                            multi_day_predictions = nested_result.get('multi_day_predictions', [])
-                            timeframe_predictions = nested_result.get('timeframe_predictions', {})
-                            confidence_analysis = nested_result.get('confidence_analysis', {})
-                            trading_recommendations = nested_result.get('trading_recommendations', {})
-                            
-                            # Display comprehensive predictions
-                            print(f"📊 Stock: {ticker}")
-                            print(f"💰 CURRENT PRICE: {currency_symbol}{current_price:.2f}")
-                            print(console_formatter.format_section("", 80))
-                            
-                            # Display individual model predictions
-                            if predictions:
-                                print(console_formatter.format_section("🤖 INDIVIDUAL MODEL PREDICTIONS", 80))
-                                for pred_type, pred_data in predictions.items():
-                                    if isinstance(pred_data, dict) and 'expected_price' in pred_data:
-                                        expected_price = pred_data['expected_price']
-                                        confidence = pred_data.get('confidence_score', 0)
-                                        change = expected_price - current_price
+                                # Display comprehensive predictions
+                                print(f"📊 Stock: {ticker}")
+                                print(f"💰 CURRENT PRICE: {currency_symbol}{current_price:.2f}")
+                                print(console_formatter.format_section("", 80))
+                                
+                                # Display individual model predictions
+                                if predictions:
+                                    print(console_formatter.format_section("🤖 INDIVIDUAL MODEL PREDICTIONS", 80))
+                                    for pred_type, pred_data in predictions.items():
+                                        if isinstance(pred_data, dict) and 'expected_price' in pred_data:
+                                            expected_price = pred_data['expected_price']
+                                            confidence = pred_data.get('confidence_score', 0)
+                                            change = expected_price - current_price
+                                            change_pct = (change / current_price) * 100
+                                            direction = "📈" if change > 0 else "📉" if change < 0 else "➡️"
+                                            print(f"   📊 {pred_type.title()}: {currency_symbol}{expected_price:.2f} ({direction} {change_pct:+.2f}%) (Confidence: {confidence:.1%})")
+                                
+                                # Display multi-day predictions
+                                if multi_day_predictions:
+                                    print(f"\n📅 MULTI-DAY PREDICTIONS:")
+                                    print("-" * 80)
+                                    for i, pred_price in enumerate(multi_day_predictions[:7], 1):  # Show first 7 days
+                                        change = pred_price - current_price
                                         change_pct = (change / current_price) * 100
                                         direction = "📈" if change > 0 else "📉" if change < 0 else "➡️"
-                                        print(f"   📊 {pred_type.title()}: {currency_symbol}{expected_price:.2f} ({direction} {change_pct:+.2f}%) (Confidence: {confidence:.1%})")
-                            
-                            # Display multi-day predictions
-                            if multi_day_predictions:
-                                print(f"\n📅 MULTI-DAY PREDICTIONS:")
-                                print("-" * 80)
-                                for i, pred_price in enumerate(multi_day_predictions[:7], 1):  # Show first 7 days
-                                    change = pred_price - current_price
-                                    change_pct = (change / current_price) * 100
-                                    direction = "📈" if change > 0 else "📉" if change < 0 else "➡️"
-                                    print(f"   Day {i}: {currency_symbol}{pred_price:.2f} ({direction} {change_pct:+.2f}%)")
-                            
-                            # Display timeframe predictions
-                            if timeframe_predictions:
-                                print(f"\n⏰ TIMEFRAME PREDICTIONS:")
-                                print("-" * 80)
-                                for timeframe, pred_prices in timeframe_predictions.items():
-                                    if pred_prices:
-                                        avg_price = sum(pred_prices) / len(pred_prices)
-                                        change = avg_price - current_price
-                                        change_pct = (change / current_price) * 100
-                                        direction = "📈" if change > 0 else "📉" if change < 0 else "➡️"
-                                        print(f"   {timeframe.title()}: {currency_symbol}{avg_price:.2f} ({direction} {change_pct:+.2f}%)")
-                            
-                            # Display confidence analysis
-                            if confidence_analysis:
-                                print(f"\n🎯 CONFIDENCE ANALYSIS:")
-                                print("-" * 80)
-                                overall_confidence = confidence_analysis.get('overall_confidence', 0)
-                                model_diversity = confidence_analysis.get('model_diversity', {})
-                                pattern_strength = confidence_analysis.get('pattern_strength', {})
+                                        print(f"   Day {i}: {currency_symbol}{pred_price:.2f} ({direction} {change_pct:+.2f}%)")
                                 
-                                # Display overall confidence
-                                if isinstance(overall_confidence, (int, float)):
-                                    print(f"   Overall Confidence: {overall_confidence:.1%}")
-                                else:
-                                    print(f"   Overall Confidence: {overall_confidence}")
+                                # Display timeframe predictions
+                                if timeframe_predictions:
+                                    print(f"\n⏰ TIMEFRAME PREDICTIONS:")
+                                    print("-" * 80)
+                                    for timeframe, pred_prices in timeframe_predictions.items():
+                                        if pred_prices:
+                                            avg_price = sum(pred_prices) / len(pred_prices)
+                                            change = avg_price - current_price
+                                            change_pct = (change / current_price) * 100
+                                            direction = "📈" if change > 0 else "📉" if change < 0 else "➡️"
+                                            print(f"   {timeframe.title()}: {currency_symbol}{avg_price:.2f} ({direction} {change_pct:+.2f}%)")
                                 
-                                # Display model diversity (it's a dictionary)
-                                if isinstance(model_diversity, dict):
-                                    diversity_level = model_diversity.get('diversity_level', 'Unknown')
-                                    diversity_desc = model_diversity.get('diversity_description', 'Unknown')
-                                    cv = model_diversity.get('coefficient_of_variation', 0)
-                                    print(f"   Model Diversity: {diversity_level} ({cv:.3f})")
-                                    print(f"   Diversity Description: {diversity_desc}")
-                                else:
-                                    print(f"   Model Diversity: {model_diversity}")
+                                # Display confidence analysis
+                                if confidence_analysis:
+                                    print(f"\n🎯 CONFIDENCE ANALYSIS:")
+                                    print("-" * 80)
+                                    overall_confidence = confidence_analysis.get('overall_confidence', 0)
+                                    model_diversity = confidence_analysis.get('model_diversity', {})
+                                    pattern_strength = confidence_analysis.get('pattern_strength', {})
+                                    
+                                    # Display overall confidence
+                                    if isinstance(overall_confidence, (int, float)):
+                                        print(f"   Overall Confidence: {overall_confidence:.1%}")
+                                    else:
+                                        print(f"   Overall Confidence: {overall_confidence}")
+                                    
+                                    # Display model diversity (it's a dictionary)
+                                    if isinstance(model_diversity, dict):
+                                        diversity_level = model_diversity.get('diversity_level', 'Unknown')
+                                        diversity_desc = model_diversity.get('diversity_description', 'Unknown')
+                                        cv = model_diversity.get('coefficient_of_variation', 0)
+                                        print(f"   Model Diversity: {diversity_level} ({cv:.3f})")
+                                        print(f"   Diversity Description: {diversity_desc}")
+                                    else:
+                                        print(f"   Model Diversity: {model_diversity}")
+                                    
+                                    # Display pattern strength (it's a dictionary)
+                                    if isinstance(pattern_strength, dict):
+                                        pattern_level = pattern_strength.get('pattern_level', 'Unknown')
+                                        pattern_desc = pattern_strength.get('pattern_description', 'Unknown')
+                                        trend_strength = pattern_strength.get('trend_strength', 0)
+                                        print(f"   Pattern Strength: {pattern_level} ({trend_strength:.3f})")
+                                        print(f"   Pattern Description: {pattern_desc}")
+                                    else:
+                                        print(f"   Pattern Strength: {pattern_strength}")
                                 
-                                # Display pattern strength (it's a dictionary)
-                                if isinstance(pattern_strength, dict):
-                                    pattern_level = pattern_strength.get('pattern_level', 'Unknown')
-                                    pattern_desc = pattern_strength.get('pattern_description', 'Unknown')
-                                    trend_strength = pattern_strength.get('trend_strength', 0)
-                                    print(f"   Pattern Strength: {pattern_level} ({trend_strength:.3f})")
-                                    print(f"   Pattern Description: {pattern_desc}")
-                                else:
-                                    print(f"   Pattern Strength: {pattern_strength}")
-                            
-                            # Display trading recommendations
-                            if trading_recommendations:
-                                print(f"\n💡 TRADING RECOMMENDATIONS:")
-                                print("-" * 80)
-                                recommendation = trading_recommendations.get('recommendation', 'Hold')
-                                risk_level = trading_recommendations.get('risk_level', 'Medium')
-                                print(f"   Recommendation: {recommendation}")
-                                print(f"   Risk Level: {risk_level}")
-                            
-                            print("\n" + "=" * 80)
-                            
-                            # Display algorithm training summary (matching backup file)
-                            print("\n🤖 ALGORITHM TRAINING SUMMARY:")
-                            print("-" * 80)
-                            algorithms = [
-                                'Random Forest', 'Gradient Boosting', 'XGBoost', 'LightGBM', 'CatBoost',
-                                'Linear Regression', 'Ridge', 'Lasso', 'Elastic Net', 'SVR', 'MLP', 'Gaussian Process'
-                            ]
-                            
-                            print("✅ Successfully trained algorithms:")
-                            for i, algo in enumerate(algorithms, 1):
-                                print(f"  {i:2d}. {algo}")
-                            
-                            print(f"\n📊 Total algorithms trained: {len(algorithms)}")
-                            print("🎯 All algorithms used for ensemble predictions")
-                            
-                            print("\n💡 TRADING RECOMMENDATIONS:")
-                            print("-" * 80)
-                            print("• Use short-term predictions for day trading and swing trading")
-                            print("• Use medium-term predictions for position trading and trend following")
-                            print("• Use long-term predictions for investment decisions and portfolio allocation")
-                            print("• Always consider risk management and diversification")
-                            print("• Past performance doesn't guarantee future results")
+                                # Display trading recommendations
+                                if trading_recommendations:
+                                    print(f"\n💡 TRADING RECOMMENDATIONS:")
+                                    print("-" * 80)
+                                    recommendation = trading_recommendations.get('recommendation', 'Hold')
+                                    risk_level = trading_recommendations.get('risk_level', 'Medium')
+                                    print(f"   Recommendation: {recommendation}")
+                                    print(f"   Risk Level: {risk_level}")
+                                
+                                print("\n" + "=" * 80)
             
             pipeline_logger.info(f"✅ Analysis completed successfully in {execution_time:.2f} seconds")
             return True
@@ -496,18 +484,27 @@ def run_quick_analysis(ticker: str, period: str = "1y", use_enhanced: bool = Tru
                                 if isinstance(pred_data, dict) and 'expected_price' in pred_data:
                                     enhanced_predictions['individual_predictions'][pred_type] = pred_data['expected_price']
                         
-                        # Use the enhanced prediction formatter
-                        try:
-                            from main.utils.enhanced_prediction_formatter import EnhancedPredictionFormatter
-                            
-                            formatter = EnhancedPredictionFormatter()
-                            formatted_output = formatter.format_prediction_output(
-                                enhanced_predictions, current_price, ticker, currency_symbol
-                            )
-                            print(formatted_output)
-                            
-                        except Exception as e:
-                            print(f"⚠️ Enhanced formatting failed, using basic display: {e}")
+                        # Check if validation-based or multi-horizon predictions are available
+                        prediction_type = nested_result.get('prediction_type')
+                        if prediction_type in ['validation_based', 'multi_horizon']:
+                            # Display validation-based prediction tables
+                            formatted_output = nested_result.get('formatted_output', '')
+                            if formatted_output:
+                                print(formatted_output)
+                            else:
+                                print("🔍 Validation-based predictions generated but formatted output not available")
+                        else:
+                            # Use the enhanced prediction formatter for regular predictions
+                            try:
+                                from main.utils.enhanced_prediction_formatter import EnhancedPredictionFormatter
+                                
+                                formatter = EnhancedPredictionFormatter()
+                                formatted_output = formatter.format_prediction_output(
+                                    enhanced_predictions, current_price, ticker, currency_symbol
+                                )
+                                print(formatted_output)
+                            except Exception as e:
+                                print(f"⚠️ Enhanced formatting failed, using basic display: {e}")
                             
                             # Fallback to basic display
                             print("\n🎯 BASIC PREDICTION RESULTS")

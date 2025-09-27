@@ -366,9 +366,11 @@ class PipelineOrchestrator:
                     # data_processor_result is already the nested result from the component
                     data = data_processor_result.get('data')
                     processed_data = data_processor_result.get('processed_data')
-                    self.logger.info(f"Passing data to {component_name}: data={data is not None}, processed_data={processed_data is not None}")
+                    multi_interval_data = data_processor_result.get('multi_interval_data')
+                    self.logger.info(f"Passing data to {component_name}: data={data is not None}, processed_data={processed_data is not None}, multi_interval_data={multi_interval_data is not None}")
                     execution_kwargs['data'] = data
                     execution_kwargs['processed_data'] = processed_data
+                    execution_kwargs['multi_interval_data'] = multi_interval_data
                 
                 # Find model trainer result (check all possible names)
                 model_trainer_result = None
@@ -376,11 +378,19 @@ class PipelineOrchestrator:
                     # Check if models are in the nested 'result' key
                     nested_result = result_data.get('result', {})
                     self.logger.info(f"Checking result {result_name}: success={result_data.get('success')}, has_models={'models' in nested_result}, models_is_none={nested_result.get('models') is None if 'models' in nested_result else 'N/A'}")
-                    if result_data.get('success') and ('models' in nested_result and nested_result['models'] is not None):
-                        # This looks like a model trainer result
-                        model_trainer_result = nested_result
-                        self.logger.info(f"Found model trainer result in component: {result_name}")
-                        break
+                    
+                    # Check both nested and direct models
+                    if result_data.get('success'):
+                        if 'models' in nested_result and nested_result['models'] is not None:
+                            # Models in nested result
+                            model_trainer_result = nested_result
+                            self.logger.info(f"Found model trainer result in component: {result_name} (nested)")
+                            break
+                        elif 'models' in result_data and result_data['models'] is not None:
+                            # Models in direct result
+                            model_trainer_result = result_data
+                            self.logger.info(f"Found model trainer result in component: {result_name} (direct)")
+                            break
                 
                 if model_trainer_result:
                     models = model_trainer_result.get('models')

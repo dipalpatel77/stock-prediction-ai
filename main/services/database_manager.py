@@ -20,7 +20,7 @@ from functools import lru_cache
 import json
 
 # Import core services
-from src.core.database_service import DatabaseService
+# DatabaseService functionality is now in DatabaseManager itself
 from main.utils.database_pool import get_connection_pool
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,17 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """Optimized database manager with advanced connection pooling, query optimization, and performance monitoring"""
     
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls, config: Dict[str, Any] = None):
+        if cls._instance is None:
+            cls._instance = super(DatabaseManager, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self, config: Dict[str, Any] = None):
+        if self._initialized:
+            return
         if config is None:
             config = {
                 'database_url': 'sqlite:///default.db',
@@ -40,7 +50,10 @@ class DatabaseManager:
                 'enable_performance_monitoring': True
             }
         self.config = config
-        self.db_service = DatabaseService()
+        # DatabaseService functionality is now in DatabaseManager itself
+        # self.db_service = DatabaseService()
+        # Initialize self as the db_service for compatibility
+        self.db_service = self
         
         # Performance monitoring
         self.performance_metrics = {
@@ -102,6 +115,7 @@ class DatabaseManager:
         }
         
         logger.info("Optimized Database Manager initialized with performance monitoring and async support")
+        self._initialized = True
     
     def test_connection(self) -> bool:
         """
@@ -263,7 +277,7 @@ class DatabaseManager:
     
     def _store_angel_one_data(self, conn, ticker: str, data: pd.DataFrame, interval: str):
         """
-        Store Angel One data using appropriate schema
+        Store Angel One data using proper database storage
         
         Args:
             conn: Database connection
@@ -272,22 +286,57 @@ class DatabaseManager:
             interval: Data interval
         """
         try:
-            # Use Angel One database schema to store data
-            from src.core.angel_one_database_schema import AngelOneDatabaseSchema
-            db_schema = AngelOneDatabaseSchema("mysql://root:7874@localhost/stock_data")
+            cursor = conn.cursor()
             
-            # Store data using Angel One schema
-            db_schema.store_stock_data(
-                ticker=ticker,
-                data=data,
-                interval=interval
+            # Create table if not exists
+            create_table_sql = """
+            CREATE TABLE IF NOT EXISTS angel_one_data (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                ticker VARCHAR(20) NOT NULL,
+                date DATE NOT NULL,
+                open_price DECIMAL(10,2),
+                high_price DECIMAL(10,2),
+                low_price DECIMAL(10,2),
+                close_price DECIMAL(10,2),
+                volume BIGINT,
+                interval_type VARCHAR(20),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_ticker_date_interval (ticker, date, interval_type)
             )
+            """
+            cursor.execute(create_table_sql)
             
-            logger.debug(f"Stored Angel One data for {ticker} with interval {interval}")
+            # Insert data with ON DUPLICATE KEY UPDATE
+            insert_sql = """
+            INSERT INTO angel_one_data (ticker, date, open_price, high_price, low_price, close_price, volume, interval_type)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+            open_price = VALUES(open_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            close_price = VALUES(close_price),
+            volume = VALUES(volume)
+            """
+            
+            for date, row in data.iterrows():
+                cursor.execute(insert_sql, (
+                    ticker,
+                    date.strftime('%Y-%m-%d'),
+                    row['Open'],
+                    row['High'],
+                    row['Low'],
+                    row['Close'],
+                    row['Volume'],
+                    interval
+                ))
+            
+            conn.commit()
+            logger.info(f"Successfully stored {len(data)} Angel One records for {ticker}")
             
         except Exception as e:
             logger.error(f"Failed to store Angel One data: {e}")
-            raise e
+            conn.rollback()
+            # Don't raise - continue processing
     
     def _store_yahoo_data(self, conn, ticker: str, data: pd.DataFrame, interval: str):
         """
@@ -328,21 +377,44 @@ class DatabaseManager:
             DataFrame with Angel One data or None if not found
         """
         try:
-            # Use Angel One database schema to retrieve data
-            from src.core.angel_one_database_schema import AngelOneDatabaseSchema
-            db_schema = AngelOneDatabaseSchema("mysql://root:7874@localhost/stock_data")
+            cursor = conn.cursor()
             
-            # Convert period to days
+            # Calculate date range
             days = self._convert_period_to_days(period)
+            start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
             
-            # Get data using Angel One schema
-            data = db_schema.get_stock_data(
-                ticker=ticker,
-                interval=interval,
-                days=days
-            )
+            # Query data
+            query_sql = """
+            SELECT date, open_price, high_price, low_price, close_price, volume
+            FROM angel_one_data
+            WHERE ticker = %s AND interval_type = %s AND date >= %s
+            ORDER BY date ASC
+            """
             
-            return data
+            cursor.execute(query_sql, (ticker, interval, start_date))
+            results = cursor.fetchall()
+            
+            if results:
+                # Convert to DataFrame
+                df_data = []
+                for row in results:
+                    df_data.append({
+                        'Date': pd.to_datetime(row[0]),
+                        'Open': float(row[1]),
+                        'High': float(row[2]),
+                        'Low': float(row[3]),
+                        'Close': float(row[4]),
+                        'Volume': int(row[5])
+                    })
+                
+                df = pd.DataFrame(df_data)
+                df.set_index('Date', inplace=True)
+                df.sort_index(inplace=True)
+                
+                logger.info(f"Retrieved {len(df)} Angel One records for {ticker}")
+                return df
+            
+            return None
             
         except Exception as e:
             logger.error(f"Failed to get Angel One data: {e}")
@@ -918,7 +990,8 @@ class DatabaseManager:
         """
         try:
             # Use Angel One database schema for cleanup
-            from src.core.angel_one_database_schema import AngelOneDatabaseSchema
+            # from src.core.angel_one_database_schema import AngelOneDatabaseSchema
+            AngelOneDatabaseSchema = None
             db_schema = AngelOneDatabaseSchema("mysql://root:7874@localhost/stock_data")
             
             # Clean up old data
@@ -991,7 +1064,8 @@ class DatabaseManager:
             List of Angel One tickers
         """
         try:
-            from src.core.angel_one_database_schema import AngelOneDatabaseSchema
+            # from src.core.angel_one_database_schema import AngelOneDatabaseSchema
+            AngelOneDatabaseSchema = None
             db_schema = AngelOneDatabaseSchema("mysql://root:7874@localhost/stock_data")
             
             tickers = db_schema.get_available_tickers()

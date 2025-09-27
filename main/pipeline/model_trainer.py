@@ -19,6 +19,7 @@ import multiprocessing as mp
 from threading import Lock
 
 from .base_pipeline import BasePipelineComponent
+from ..services.interval_manager import IntervalManager, PredictionHorizon
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -144,6 +145,11 @@ class ModelTrainer(BasePipelineComponent):
         # Parallel processing configuration
         self.enable_parallel_training = self.config.get('enable_parallel_training', True)
         self.max_workers = self.config.get('max_workers', min(8, mp.cpu_count()))
+        
+        # Multi-interval training configuration
+        self.enable_multi_interval_training = self.config.get('enable_multi_interval_training', True)
+        self.interval_manager = IntervalManager(config)
+        self.multi_interval_models = {}
         self.use_process_pool = self.config.get('use_process_pool', True)  # Use ProcessPool for CPU-bound tasks
         
         # Thread-safe results storage
@@ -175,12 +181,13 @@ class ModelTrainer(BasePipelineComponent):
             self.logger.error(f"Data preparation failed: {e}")
             raise
     
-    def execute(self, data: pd.DataFrame = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, data: pd.DataFrame = None, multi_interval_data: Dict[str, pd.DataFrame] = None, **kwargs) -> Dict[str, Any]:
         """
-        Execute enhanced model training with 16+ algorithms
+        Execute enhanced model training with 16+ algorithms and multi-interval support
         
         Args:
-            data: Training data
+            data: Training data (single interval)
+            multi_interval_data: Multi-interval data dictionary
             **kwargs: Additional parameters
             
         Returns:
@@ -189,17 +196,14 @@ class ModelTrainer(BasePipelineComponent):
         try:
             self.logger.info("🚀 Starting enhanced model training with 16+ algorithms")
             self.logger.info(f"Model trainer received data: {data is not None}, empty: {data.empty if data is not None else 'N/A'}")
+            self.logger.info(f"Multi-interval data available: {multi_interval_data is not None}")
+            
+            # Check if we have multi-interval data and should use it
+            if self.enable_multi_interval_training and multi_interval_data:
+                return self._execute_multi_interval_training(multi_interval_data, **kwargs)
             
             if data is None or data.empty:
-                self.logger.warning("No training data provided, using sample data")
-                # Generate sample data for demonstration
-                sample_data = pd.DataFrame({
-                    'Close': np.random.randn(100).cumsum() + 100,
-                    'Volume': np.random.randint(1000, 10000, 100),
-                    'SMA_20': np.random.randn(100).cumsum() + 100,
-                    'RSI': np.random.uniform(20, 80, 100)
-                })
-                data = sample_data
+                return {'success': False, 'error': 'No training data available. Cannot proceed without real data from Angel One API.'}
             
             # Prepare data
             X, y = self._prepare_data(data)
@@ -882,14 +886,25 @@ class ModelTrainer(BasePipelineComponent):
             
             # Model performance
             for name, result in training_results.items():
-                metrics = result['metrics']
-                summary['model_performance'][name] = {
-                    'r2': metrics['test_r2'],
-                    'mse': metrics['test_mse'],
-                    'mae': metrics['test_mae'],
-                    'overfitting': metrics['overfitting']
-                }
-                summary['training_time'][name] = metrics['training_time']
+                if 'metrics' in result:
+                    metrics = result['metrics']
+                    summary['model_performance'][name] = {
+                        'r2': metrics.get('test_r2', 0.0),
+                        'mse': metrics.get('test_mse', 0.0),
+                        'mae': metrics.get('test_mae', 0.0),
+                        'overfitting': metrics.get('overfitting', False)
+                    }
+                    summary['training_time'][name] = metrics.get('training_time', 0.0)
+                else:
+                    # Handle case where metrics key is missing
+                    summary['model_performance'][name] = {
+                        'r2': 0.0,
+                        'mse': 0.0,
+                        'mae': 0.0,
+                        'overfitting': False
+                    }
+                    summary['training_time'][name] = 0.0
+                
                 summary['feature_importance'][name] = result.get('feature_importance', {})
             
             return summary
@@ -967,3 +982,297 @@ class ModelTrainer(BasePipelineComponent):
     def get_required_config_fields(self) -> List[str]:
         """Get required configuration fields"""
         return ['random_state', 'cv_folds', 'test_size']
+    
+    def _execute_multi_interval_training(self, multi_interval_data: Dict[str, pd.DataFrame], **kwargs) -> Dict[str, Any]:
+        """
+        Execute multi-interval training for different prediction horizons
+        
+        Args:
+            multi_interval_data: Dictionary of interval data
+            **kwargs: Additional parameters
+            
+        Returns:
+            Multi-interval training results
+        """
+        try:
+            self.logger.info("🎯 Starting multi-interval training for different prediction horizons")
+            
+            # Define prediction horizons to train for
+            horizons = [
+                PredictionHorizon.INTRADAY,
+                PredictionHorizon.SHORT_TERM, 
+                PredictionHorizon.MEDIUM_TERM,
+                PredictionHorizon.LONG_TERM
+            ]
+            
+            multi_interval_results = {}
+            
+            for horizon in horizons:
+                try:
+                    self.logger.info(f"📊 Training models for {horizon.value} horizon")
+                    
+                    # Get optimal intervals for this horizon
+                    interval_config = self.interval_manager.get_optimal_intervals(horizon, multi_interval_data)
+                    
+                    if not interval_config['intervals']:
+                        self.logger.warning(f"No suitable intervals for {horizon.value}, skipping")
+                        continue
+                    
+                    # Aggregate data for this horizon
+                    aggregated_data = self.interval_manager.aggregate_multi_interval_data(
+                        multi_interval_data, interval_config
+                    )
+                    
+                    if aggregated_data.empty:
+                        self.logger.warning(f"No aggregated data for {horizon.value}, skipping")
+                        continue
+                    
+                    # Prepare data for this horizon
+                    X, y = self._prepare_data(aggregated_data)
+                    if X is None or y is None:
+                        self.logger.warning(f"Data preparation failed for {horizon.value}, skipping")
+                        continue
+                    
+                    # Split data
+                    X_train, X_test, y_train, y_test = self._split_data(X, y)
+                    
+                    # Train models for this horizon
+                    horizon_results = self._train_horizon_models(
+                        horizon, X_train, y_train, X_test, y_test, interval_config
+                    )
+                    
+                    if horizon_results:
+                        multi_interval_results[horizon.value] = horizon_results
+                        self.logger.info(f"✅ {horizon.value} training completed: {len(horizon_results)} models")
+                    
+                except Exception as e:
+                    self.logger.error(f"Failed to train models for {horizon.value}: {e}")
+                    continue
+            
+            # Create ensemble models across horizons
+            ensemble_results = self._create_multi_horizon_ensemble(multi_interval_results)
+            
+            # Flatten models for prediction generator compatibility
+            all_models = {}
+            for horizon, horizon_models in multi_interval_results.items():
+                for model_name, model_data in horizon_models.items():
+                    # horizon is already a string key, not an enum
+                    all_models[f"{horizon}_{model_name}"] = model_data
+            
+            result = {
+                'success': True,
+                'ticker': self.ticker,
+                'execution_time': time.time() - self.start_time if hasattr(self, 'start_time') else 0,
+                'models': all_models,  # Add models key for prediction generator
+                'multi_interval_results': multi_interval_results,
+                'ensemble_results': ensemble_results,
+                'horizons_trained': list(multi_interval_results.keys()),
+                'total_models': sum(len(horizon_models) for horizon_models in multi_interval_results.values()),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            self.logger.info(f"🎉 Multi-interval training completed: {len(multi_interval_results)} horizons, {result['total_models']} total models")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Multi-interval training failed: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def _train_horizon_models(self, horizon: PredictionHorizon, X_train: pd.DataFrame, 
+                            y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series,
+                            interval_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Train models for a specific prediction horizon
+        
+        Args:
+            horizon: Prediction horizon
+            X_train, y_train: Training data
+            X_test, y_test: Test data
+            interval_config: Interval configuration
+            
+        Returns:
+            Horizon-specific model results
+        """
+        try:
+            # Get feature engineering strategy for this horizon
+            feature_strategy = self.interval_manager.get_feature_engineering_strategy(horizon)
+            
+            # Select models based on horizon
+            horizon_models = self._select_models_for_horizon(horizon)
+            
+            # Train models
+            training_results = {}
+            for name, model in horizon_models.items():
+                if model is None:  # Skip unavailable models
+                    continue
+                    
+                try:
+                    # Train model
+                    start_time = time.time()
+                    model.fit(X_train, y_train)
+                    training_time = time.time() - start_time
+                    
+                    # Make predictions
+                    y_pred = model.predict(X_test)
+                    
+                    # Calculate metrics
+                    r2 = r2_score(y_test, y_pred)
+                    mse = mean_squared_error(y_test, y_pred)
+                    mae = mean_absolute_error(y_test, y_pred)
+                    
+                    # Cross-validation
+                    cv_scores = cross_val_score(model, X_train, y_train, cv=self.cv_folds, scoring='r2')
+                    cv_mean = cv_scores.mean()
+                    cv_std = cv_scores.std()
+                    
+                    # Feature importance (if available)
+                    feature_importance = {}
+                    if hasattr(model, 'feature_importances_'):
+                        feature_importance = dict(zip(X_train.columns, model.feature_importances_))
+                    elif hasattr(model, 'coef_'):
+                        feature_importance = dict(zip(X_train.columns, model.coef_))
+                    
+                    training_results[name] = {
+                        'model': model,
+                        'metrics': {
+                            'test_r2': r2,
+                            'test_mse': mse,
+                            'test_mae': mae,
+                            'cv_mean': cv_mean,
+                            'cv_std': cv_std,
+                            'training_time': training_time,
+                            'overfitting': abs(r2 - cv_mean) > 0.1
+                        },
+                        'feature_importance': feature_importance,
+                        'horizon': horizon.value,
+                        'interval_config': interval_config,
+                        'feature_strategy': feature_strategy
+                    }
+                    
+                    self.logger.info(f"✅ {name} for {horizon.value}: R²={r2:.4f}, Time={training_time:.2f}s")
+                    
+                except Exception as e:
+                    self.logger.error(f"Failed to train {name} for {horizon.value}: {e}")
+                    continue
+            
+            return training_results
+            
+        except Exception as e:
+            self.logger.error(f"Failed to train horizon models for {horizon.value}: {e}")
+            return {}
+    
+    def _select_models_for_horizon(self, horizon: PredictionHorizon) -> Dict[str, Any]:
+        """
+        Select appropriate models for a specific prediction horizon
+        
+        Args:
+            horizon: Prediction horizon
+            
+        Returns:
+            Dictionary of selected models
+        """
+        try:
+            # Model selection based on horizon
+            if horizon == PredictionHorizon.INTRADAY:
+                # Fast models for intraday predictions
+                return {
+                    'LinearRegression': LinearRegression(),
+                    'Ridge': Ridge(alpha=1.0),
+                    'Lasso': Lasso(alpha=0.1),
+                    'SVR': SVR(kernel='rbf', C=1.0),
+                    'RandomForest': RandomForestRegressor(n_estimators=50, random_state=42),
+                    'XGBoost': xgb.XGBRegressor(n_estimators=50, random_state=42) if XGBOOST_AVAILABLE else None
+                }
+            elif horizon == PredictionHorizon.SHORT_TERM:
+                # Balanced models for short-term predictions
+                return {
+                    'LinearRegression': LinearRegression(),
+                    'Ridge': Ridge(alpha=1.0),
+                    'Lasso': Lasso(alpha=0.1),
+                    'ElasticNet': ElasticNet(alpha=0.1, l1_ratio=0.5),
+                    'RandomForest': RandomForestRegressor(n_estimators=100, random_state=42),
+                    'GradientBoosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
+                    'XGBoost': xgb.XGBRegressor(n_estimators=100, random_state=42) if XGBOOST_AVAILABLE else None,
+                    'LightGBM': lgb.LGBMRegressor(n_estimators=100, random_state=42) if LIGHTGBM_AVAILABLE else None
+                }
+            elif horizon == PredictionHorizon.MEDIUM_TERM:
+                # Robust models for medium-term predictions
+                return {
+                    'LinearRegression': LinearRegression(),
+                    'Ridge': Ridge(alpha=1.0),
+                    'RandomForest': RandomForestRegressor(n_estimators=200, random_state=42),
+                    'GradientBoosting': GradientBoostingRegressor(n_estimators=200, random_state=42),
+                    'ExtraTrees': ExtraTreesRegressor(n_estimators=200, random_state=42),
+                    'XGBoost': xgb.XGBRegressor(n_estimators=200, random_state=42) if XGBOOST_AVAILABLE else None,
+                    'LightGBM': lgb.LGBMRegressor(n_estimators=200, random_state=42) if LIGHTGBM_AVAILABLE else None,
+                    'CatBoost': CatBoostRegressor(iterations=200, random_state=42, verbose=False) if CATBOOST_AVAILABLE else None
+                }
+            else:  # LONG_TERM
+                # Conservative models for long-term predictions
+                return {
+                    'LinearRegression': LinearRegression(),
+                    'Ridge': Ridge(alpha=1.0),
+                    'RandomForest': RandomForestRegressor(n_estimators=300, random_state=42),
+                    'GradientBoosting': GradientBoostingRegressor(n_estimators=300, random_state=42),
+                    'ExtraTrees': ExtraTreesRegressor(n_estimators=300, random_state=42),
+                    'XGBoost': xgb.XGBRegressor(n_estimators=300, random_state=42) if XGBOOST_AVAILABLE else None,
+                    'LightGBM': lgb.LGBMRegressor(n_estimators=300, random_state=42) if LIGHTGBM_AVAILABLE else None
+                }
+                
+        except Exception as e:
+            self.logger.error(f"Failed to select models for {horizon.value}: {e}")
+            return {'LinearRegression': LinearRegression()}
+    
+    def _create_multi_horizon_ensemble(self, multi_interval_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Create ensemble models across different horizons
+        
+        Args:
+            multi_interval_results: Results from all horizons
+            
+        Returns:
+            Ensemble results
+        """
+        try:
+            if not multi_interval_results:
+                return {}
+            
+            ensemble_results = {}
+            
+            # Create horizon-weighted ensemble
+            horizon_weights = {
+                'intraday': 0.1,
+                'short_term': 0.3,
+                'medium_term': 0.4,
+                'long_term': 0.2
+            }
+            
+            # Find best models from each horizon
+            best_models = {}
+            for horizon, results in multi_interval_results.items():
+                if results:
+                    # Find best model by R² score
+                    best_model_name = max(results.keys(), 
+                                        key=lambda x: results[x]['metrics']['test_r2'])
+                    # horizon is already a string key
+                    best_models[horizon] = {
+                        'model': results[best_model_name]['model'],
+                        'weight': horizon_weights.get(horizon, 0.25),
+                        'r2': results[best_model_name]['metrics']['test_r2']
+                    }
+            
+            if len(best_models) >= 2:
+                # Create weighted ensemble
+                ensemble_results['multi_horizon_ensemble'] = {
+                    'models': best_models,
+                    'total_weight': sum(model['weight'] for model in best_models.values()),
+                    'description': 'Multi-horizon weighted ensemble'
+                }
+                
+                self.logger.info(f"✅ Multi-horizon ensemble created with {len(best_models)} models")
+            
+            return ensemble_results
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create multi-horizon ensemble: {e}")
+            return {}

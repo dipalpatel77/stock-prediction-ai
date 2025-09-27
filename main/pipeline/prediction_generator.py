@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import json
 
 from .base_pipeline import BasePipelineComponent
+from ..services.interval_manager import IntervalManager, PredictionHorizon
+from ..services.validation_predictor import ValidationPredictor
 
 
 class PredictionGenerator(BasePipelineComponent):
@@ -62,15 +64,25 @@ class PredictionGenerator(BasePipelineComponent):
         self.currency_symbol = '₹' if self.ticker in self.indian_stocks else '$'
         self.currency_name = 'INR' if self.ticker in self.indian_stocks else 'USD'
         
+        # Multi-interval prediction configuration
+        self.enable_multi_interval_predictions = self.config.get('enable_multi_interval_predictions', True)
+        self.interval_manager = IntervalManager(config)
+        
+        # Validation-based prediction
+        self.enable_validation_predictions = self.config.get('enable_validation_predictions', True)
+        self.validation_predictor = ValidationPredictor(config)
+        
         self.logger.info(f"Enhanced Prediction Generator initialized for {ticker}")
     
-    def execute(self, data: pd.DataFrame = None, models: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, data: pd.DataFrame = None, models: Dict[str, Any] = None, 
+                multi_interval_data: Dict[str, pd.DataFrame] = None, **kwargs) -> Dict[str, Any]:
         """
-        Execute enhanced prediction generation with detailed descriptions
+        Execute enhanced prediction generation with detailed descriptions and multi-interval support
         
         Args:
             data: Historical data for prediction
             models: Trained models for prediction
+            multi_interval_data: Multi-interval data dictionary
             **kwargs: Additional parameters
             
         Returns:
@@ -80,14 +92,25 @@ class PredictionGenerator(BasePipelineComponent):
             self.logger.info(f"Prediction generator received data: {data is not None}, empty: {data.empty if data is not None else 'N/A'}")
             self.logger.info(f"Prediction generator received models: {models is not None}, count: {len(models) if models else 0}")
             
-            # If no data provided, generate sample predictions for demonstration
+            # If no data provided, fail completely - no sample predictions
             if data is None or data.empty:
-                self.logger.warning("No data provided, generating sample predictions")
-                return self._generate_enhanced_sample_predictions()
+                return {'success': False, 'error': 'No data available. Cannot generate predictions without real data from Angel One API.'}
             
             # Debug: Check if we're getting real data
             self.logger.info(f"Data shape: {data.shape}, columns: {list(data.columns)}")
             self.logger.info(f"Data sample: {data.head(2).to_dict()}")
+            
+            # Check if validation-based predictions are enabled
+            if self.enable_validation_predictions:
+                self.logger.info("🔍 Generating comprehensive multi-horizon predictions with confidence scoring...")
+                validation_results = self._generate_multi_horizon_predictions(data, **kwargs)
+                if validation_results and validation_results.get('success'):
+                    return validation_results
+            
+            # Check if we have multi-interval data and should use it
+            if self.enable_multi_interval_predictions and multi_interval_data:
+                self.logger.info("Using multi-interval data for sophisticated predictions")
+                return self._generate_multi_interval_predictions(data, models, multi_interval_data)
             
             # If no models provided, use simple statistical methods
             if models is None or not models:
@@ -143,8 +166,12 @@ class PredictionGenerator(BasePipelineComponent):
                     if isinstance(expected_price, str):
                         price_str = expected_price.replace(self.currency_symbol, '').replace(',', '')
                         individual_predictions[horizon_name] = float(price_str)
-                    else:
+                    elif isinstance(expected_price, (int, float)):
                         individual_predictions[horizon_name] = float(expected_price)
+                    else:
+                        # Convert to string first, then process
+                        price_str = str(expected_price).replace(self.currency_symbol, '').replace(',', '')
+                        individual_predictions[horizon_name] = float(price_str)
             
             # Generate multi-day predictions
             multi_day_predictions = self._generate_multi_day_predictions(data, models, 5)
@@ -186,6 +213,98 @@ class PredictionGenerator(BasePipelineComponent):
             
         except Exception as e:
             self.logger.error(f"Enhanced prediction generation failed: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def _generate_validation_predictions(self, data: pd.DataFrame, **kwargs) -> Dict[str, Any]:
+        """
+        Generate validation-based predictions with confidence scoring
+        
+        Args:
+            data: Historical stock data
+            **kwargs: Additional parameters
+            
+        Returns:
+            Validation-based prediction results
+        """
+        try:
+            self.logger.info("🎯 Starting validation-based prediction generation...")
+            
+            # Generate validation predictions
+            validation_results = self.validation_predictor.predict_with_validation(data, self.ticker)
+            
+            if 'error' in validation_results:
+                self.logger.error(f"Validation prediction failed: {validation_results['error']}")
+                return {'success': False, 'error': validation_results['error']}
+            
+            # Format the results for display
+            formatted_tables = self.validation_predictor.format_prediction_tables(validation_results)
+            
+            # Create comprehensive result structure
+            result = {
+                'success': True,
+                'ticker': self.ticker,
+                'prediction_type': 'validation_based',
+                'validation_results': validation_results,
+                'formatted_output': formatted_tables,
+                'overall_confidence': validation_results.get('overall_confidence', 0),
+                'daily_confidence': validation_results.get('daily_predictions', {}).get('confidence_score', 0),
+                'weekly_confidence': validation_results.get('weekly_predictions', {}).get('confidence_score', 0),
+                'timestamp': datetime.now().isoformat(),
+                'currency_symbol': self.currency_symbol,
+                'currency_name': self.currency_name
+            }
+            
+            self.logger.info(f"✅ Validation-based predictions completed with {result['overall_confidence']:.1f}% confidence")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Validation prediction generation failed: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def _generate_multi_horizon_predictions(self, data: pd.DataFrame, **kwargs) -> Dict[str, Any]:
+        """
+        Generate comprehensive multi-horizon predictions (intraday, short-term, medium-term, long-term)
+        
+        Args:
+            data: Historical stock data
+            **kwargs: Additional arguments
+            
+        Returns:
+            Multi-horizon prediction results
+        """
+        try:
+            self.logger.info("🎯 Starting comprehensive multi-horizon prediction generation...")
+            
+            # Use ValidationPredictor for multi-horizon predictions
+            multi_horizon_results = self.validation_predictor.predict_multi_horizon(data, self.ticker)
+            
+            if 'error' in multi_horizon_results:
+                self.logger.error(f"Multi-horizon prediction failed: {multi_horizon_results['error']}")
+                return {'success': False, 'error': multi_horizon_results['error']}
+            
+            # Format the results into tables
+            formatted_tables = self.validation_predictor.format_multi_horizon_tables(multi_horizon_results)
+            
+            # Return structured results
+            result = {
+                'success': True,
+                'ticker': self.ticker,
+                'prediction_type': 'multi_horizon',
+                'multi_horizon_results': multi_horizon_results,
+                'formatted_output': formatted_tables,
+                'overall_confidence': multi_horizon_results.get('overall_confidence', 0),
+                'horizons': multi_horizon_results.get('horizons', {}),
+                'summary': multi_horizon_results.get('summary', {}),
+                'timestamp': datetime.now().isoformat(),
+                'currency_symbol': self.currency_symbol,
+                'currency_name': self.currency_name
+            }
+            
+            self.logger.info(f"✅ Multi-horizon predictions completed with {result['overall_confidence']:.1f}% confidence")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Multi-horizon prediction generation failed: {e}")
             return {'success': False, 'error': str(e)}
     
     def _generate_enhanced_horizon_predictions(self, data: pd.DataFrame, models: Dict[str, Any], 
@@ -709,158 +828,6 @@ class PredictionGenerator(BasePipelineComponent):
             self.logger.error(f"Statistical prediction failed: {e}")
             return current_price
     
-    def _generate_enhanced_sample_predictions(self) -> Dict[str, Any]:
-        """Generate enhanced sample predictions for demonstration"""
-        try:
-            current_price = 2500.0 if self.ticker in self.indian_stocks else 150.0
-            
-            sample_predictions = {}
-            
-            for horizon_name, days in self.prediction_horizons.items():
-                # Generate sample expected price
-                price_change_pct = np.random.normal(0, 0.05)  # 5% volatility
-                expected_price = current_price * (1 + price_change_pct)
-                
-                price_range = {
-                    'low': expected_price * 0.95,
-                    'high': expected_price * 1.05
-                }
-                
-                confidence_score = np.random.uniform(0.6, 0.9)
-                
-                description = self._generate_prediction_description(
-                    horizon_name, days, expected_price, price_range, confidence_score, current_price
-                )
-                
-                sample_predictions[horizon_name] = {
-                    'horizon_name': horizon_name,
-                    'days': days,
-                    'current_price': current_price,
-                    'expected_price': expected_price,
-                    'price_range': {
-                        'low': price_range['low'],
-                        'high': price_range['high']
-                    },
-                    'confidence_score': confidence_score,
-                    'description': description,
-                    'technical_insights': {
-                        'rsi_signal': 'Neutral - No clear signal',
-                        'ma_signal': 'Price above 20-day SMA - Bullish trend',
-                        'volume_signal': 'Normal volume - Steady interest'
-                    },
-                    'market_sentiment': {
-                        'sentiment': 'Bullish' if price_change_pct > 0 else 'Bearish',
-                        'recommendation': 'Buy' if price_change_pct > 0 else 'Sell',
-                        'price_change_percentage': f"{price_change_pct*100:.1f}%"
-                    },
-                    'price_change': {
-                        'absolute': expected_price - current_price,
-                        'percentage': price_change_pct * 100,
-                        'direction': 'bullish' if price_change_pct > 0 else 'bearish'
-                    }
-                }
-            
-            # Convert to format expected by enhanced formatter
-            individual_predictions = {}
-            for horizon_name, pred_data in sample_predictions.items():
-                if 'expected_price' in pred_data:
-                    # Extract numeric value from formatted string
-                    price_str = pred_data['expected_price'].replace(self.currency_symbol, '').replace(',', '')
-                    individual_predictions[horizon_name] = float(price_str)
-            
-            # Generate multi-day predictions
-            multi_day_predictions = []
-            for i in range(5):  # 5 days ahead
-                price_change_pct = np.random.normal(0, 0.02)  # 2% daily volatility
-                day_price = current_price * (1 + price_change_pct * (i + 1))
-                multi_day_predictions.append(day_price)
-            
-            # Generate timeframe predictions
-            timeframe_predictions = {
-                'short_term': [current_price * 1.01, current_price * 1.02, current_price * 1.03],
-                'medium_term': [current_price * 1.05, current_price * 1.08, current_price * 1.10],
-                'long_term': [current_price * 1.15, current_price * 1.20, current_price * 1.25]
-            }
-            
-            # Generate confidence analysis
-            all_predictions = list(individual_predictions.values()) + multi_day_predictions
-            mean_pred = np.mean(all_predictions)
-            std_pred = np.std(all_predictions)
-            
-            confidence_analysis = {
-                'mean': mean_pred,
-                'std': std_pred,
-                'confidence_68': [mean_pred - std_pred, mean_pred + std_pred],
-                'confidence_95': [mean_pred - 2*std_pred, mean_pred + 2*std_pred],
-                'agreement_score': 0.85,
-                'model_diversity': {
-                    'diversity_level': 'Medium',
-                    'diversity_description': 'Models show moderate agreement',
-                    'coefficient_of_variation': 0.05,
-                    'prediction_range': std_pred * 2,
-                    'prediction_range_pct': (std_pred * 2 / mean_pred) * 100
-                },
-                'pattern_strength': {
-                    'pattern_level': 'Medium',
-                    'pattern_description': 'Moderate trend pattern detected',
-                    'trend_strength': 0.6
-                }
-            }
-            
-            # Generate trading recommendations
-            avg_change = (mean_pred - current_price) / current_price * 100
-            if avg_change > 2:
-                overall_rec = "🟢 STRONG BUY - High confidence upward momentum"
-            elif avg_change > 0.5:
-                overall_rec = "🟡 BUY - High confidence moderate upward potential"
-            elif avg_change < -2:
-                overall_rec = "🔴 STRONG SELL - High confidence downward pressure"
-            elif avg_change < -0.5:
-                overall_rec = "🟠 SELL - High confidence moderate downward potential"
-            else:
-                overall_rec = "⚪ HOLD - High confidence stable movement"
-            
-            trading_recommendations = {
-                'overall_recommendation': overall_rec,
-                'timeframe_recommendations': {
-                    'short_term': 'Buy for short-term gains' if avg_change > 0 else 'Sell to avoid short-term losses',
-                    'medium_term': 'Strong buy for medium-term' if avg_change > 1 else 'Hold for medium-term',
-                    'long_term': 'Excellent long-term investment' if avg_change > 2 else 'Moderate long-term potential'
-                },
-                'confidence_level': 'High'
-            }
-            
-            return {
-                'success': True,
-                'ticker': self.ticker,
-                'currency_symbol': self.currency_symbol,
-                'currency_name': self.currency_name,
-                'predictions': sample_predictions,  # Keep original format for compatibility
-                'individual_predictions': individual_predictions,
-                'multi_day_predictions': multi_day_predictions,
-                'timeframe_predictions': timeframe_predictions,
-                'confidence_analysis': confidence_analysis,
-                'trading_recommendations': trading_recommendations,
-                'market_analysis': {
-                    'overall_trend': 'Bullish',
-                    'volatility_assessment': 'Medium',
-                    'market_conditions': 'Favorable'
-                },
-                'investment_recommendations': {
-                    'short_term_action': 'Monitor closely for quick opportunities',
-                    'mid_term_strategy': 'Consider position sizing based on risk tolerance',
-                    'long_term_outlook': 'Evaluate fundamental factors for strategic decisions'
-                },
-                'risk_assessment': {
-                    'overall_risk_level': 'Medium',
-                    'risk_factors': ['Market volatility', 'Economic uncertainty'],
-                    'mitigation_strategies': ['Diversify investments', 'Use stop-loss orders']
-                }
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Enhanced sample prediction generation failed: {e}")
-            return {'success': False, 'error': str(e)}
     
     def _generate_enhanced_statistical_predictions(self, data: pd.DataFrame) -> Dict[str, Any]:
         """Generate enhanced statistical predictions"""
@@ -1729,45 +1696,301 @@ class PredictionGenerator(BasePipelineComponent):
             # Fallback to statistical predictions
             return self._generate_enhanced_statistical_predictions(data)
     
-    def _prepare_prediction_features(self, data: pd.DataFrame) -> np.ndarray:
+    def _prepare_prediction_features(self, data: pd.DataFrame, days: int = 1) -> np.ndarray:
         """
         Prepare features for ML model prediction
         
         Args:
             data: Historical data
+            days: Number of days for prediction
             
         Returns:
             Feature array for prediction
         """
         try:
             # Use the same feature preparation as in model training
-            if 'Close' in data.columns:
-                # Simple features for prediction
-                features = []
-                
-                # Price-based features
-                if len(data) >= 5:
-                    features.extend([
-                        data['Close'].iloc[-1],  # Latest close
-                        data['Close'].iloc[-5:].mean(),  # 5-day average
-                        data['Close'].iloc[-10:].mean() if len(data) >= 10 else data['Close'].iloc[-1],  # 10-day average
-                        data['Close'].iloc[-1] / data['Close'].iloc[-5:].mean() if len(data) >= 5 else 1.0,  # Price ratio
-                    ])
-                else:
-                    features = [data['Close'].iloc[-1]] * 4
-                
-                # Add volume if available
-                if 'Volume' in data.columns and len(data) >= 5:
-                    features.append(data['Volume'].iloc[-5:].mean())
-                else:
-                    features.append(1000000)  # Default volume
-                
-                return np.array(features).reshape(1, -1)
+            # Select numeric columns and handle missing values
+            numeric_data = data.select_dtypes(include=[np.number])
+            numeric_data = numeric_data.dropna()
+            
+            if numeric_data.empty:
+                self.logger.warning("No numeric data available for prediction")
+                return np.array([[100.0, 100.0, 100.0, 100.0]]).reshape(1, -1)
+            
+            # Use the same feature selection logic as model trainer
+            # Remove 'Close' column if it exists (it's the target, not a feature)
+            if 'Close' in numeric_data.columns:
+                features = numeric_data.drop('Close', axis=1)
             else:
-                # Fallback features
-                return np.array([[100.0, 100.0, 100.0, 1.0, 1000000]]).reshape(1, -1)
-                
+                # Use all columns except the last one (assuming last is target)
+                features = numeric_data.iloc[:, :-1]
+            
+            # Use the last row as features
+            features = features.iloc[-1:].copy()
+            
+            # Ensure we have the right number of features (4 for most models)
+            if features.shape[1] > 4:
+                # Take the first 4 features
+                features = features.iloc[:, :4]
+            elif features.shape[1] < 4:
+                # Pad with the last feature value
+                last_feature = features.iloc[:, -1].iloc[0] if features.shape[1] > 0 else 100.0
+                while features.shape[1] < 4:
+                    features[f'feature_{features.shape[1]}'] = last_feature
+            
+            return features.values
+            
         except Exception as e:
             self.logger.error(f"Feature preparation failed: {e}")
-            # Return default features
-            return np.array([[100.0, 100.0, 100.0, 1.0, 1000000]]).reshape(1, -1)
+            # Return default features with 4 columns
+            return np.array([[100.0, 100.0, 100.0, 100.0]]).reshape(1, -1)
+    
+    def _generate_multi_interval_predictions(self, data: pd.DataFrame, models: Dict[str, Any], 
+                                          multi_interval_data: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
+        """
+        Generate sophisticated predictions using multiple intervals for different horizons
+        
+        Args:
+            data: Main processed data
+            models: Trained models
+            multi_interval_data: Multi-interval data dictionary
+            
+        Returns:
+            Multi-interval prediction results
+        """
+        try:
+            self.logger.info("🎯 Generating sophisticated multi-interval predictions")
+            
+            # Define prediction horizons
+            horizons = [
+                (PredictionHorizon.INTRADAY, 1, "Intraday (1 day)"),
+                (PredictionHorizon.SHORT_TERM, 7, "Short-term (1 week)"),
+                (PredictionHorizon.SHORT_TERM, 30, "Short-term (1 month)"),
+                (PredictionHorizon.MEDIUM_TERM, 90, "Medium-term (3 months)"),
+                (PredictionHorizon.LONG_TERM, 180, "Long-term (6 months)"),
+                (PredictionHorizon.LONG_TERM, 365, "Long-term (1 year)")
+            ]
+            
+            multi_interval_predictions = {}
+            
+            for horizon, days, description in horizons:
+                try:
+                    self.logger.info(f"📊 Generating {description} predictions")
+                    
+                    # Get optimal intervals for this horizon
+                    interval_config = self.interval_manager.get_optimal_intervals(horizon, multi_interval_data)
+                    
+                    if not interval_config['intervals']:
+                        self.logger.warning(f"No suitable intervals for {description}, skipping")
+                        continue
+                    
+                    # Aggregate data for this horizon
+                    aggregated_data = self.interval_manager.aggregate_multi_interval_data(
+                        multi_interval_data, interval_config
+                    )
+                    
+                    if aggregated_data.empty:
+                        self.logger.warning(f"No aggregated data for {description}, using main data")
+                        aggregated_data = data
+                    
+                    # Generate predictions for this horizon
+                    horizon_predictions = self._generate_horizon_predictions(
+                        horizon, days, description, aggregated_data, models, interval_config
+                    )
+                    
+                    if horizon_predictions:
+                        multi_interval_predictions[description] = horizon_predictions
+                        self.logger.info(f"✅ {description} predictions completed")
+                    
+                except Exception as e:
+                    self.logger.error(f"Failed to generate {description} predictions: {e}")
+                    continue
+            
+            # Create ensemble predictions across horizons
+            ensemble_predictions = self._create_multi_horizon_ensemble_predictions(multi_interval_predictions)
+            
+            result = {
+                'success': True,
+                'ticker': self.ticker,
+                'prediction_type': 'multi_interval',
+                'horizons_predicted': list(multi_interval_predictions.keys()),
+                'multi_interval_predictions': multi_interval_predictions,
+                'ensemble_predictions': ensemble_predictions,
+                'total_predictions': len(multi_interval_predictions),
+                'timestamp': datetime.now().isoformat(),
+                'currency_symbol': self.currency_symbol,
+                'currency_name': self.currency_name
+            }
+            
+            self.logger.info(f"🎉 Multi-interval predictions completed: {len(multi_interval_predictions)} horizons")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Multi-interval prediction generation failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'ticker': self.ticker,
+                'prediction_type': 'multi_interval'
+            }
+    
+    def _generate_horizon_predictions(self, horizon: PredictionHorizon, days: int, 
+                                    description: str, data: pd.DataFrame, 
+                                    models: Dict[str, Any], interval_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate predictions for a specific horizon
+        
+        Args:
+            horizon: Prediction horizon
+            days: Number of days to predict
+            description: Description of the horizon
+            data: Data for this horizon
+            models: Trained models
+            interval_config: Interval configuration
+            
+        Returns:
+            Horizon-specific predictions
+        """
+        try:
+            # Get feature engineering strategy for this horizon
+            feature_strategy = self.interval_manager.get_feature_engineering_strategy(horizon)
+            
+            # Prepare features for prediction
+            features = self._prepare_prediction_features(data, days)
+            
+            if features is None or features.size == 0:
+                self.logger.warning(f"No features available for {description}")
+                return {}
+            
+            # Generate predictions using different models
+            model_predictions = {}
+            
+            # Use appropriate models for this horizon
+            if horizon == PredictionHorizon.INTRADAY:
+                # Fast models for intraday
+                model_names = ['LinearRegression', 'Ridge', 'SVR', 'RandomForest']
+            elif horizon == PredictionHorizon.SHORT_TERM:
+                # Balanced models for short-term
+                model_names = ['LinearRegression', 'Ridge', 'RandomForest', 'GradientBoosting', 'XGBoost']
+            elif horizon == PredictionHorizon.MEDIUM_TERM:
+                # Robust models for medium-term
+                model_names = ['LinearRegression', 'Ridge', 'RandomForest', 'GradientBoosting', 'XGBoost', 'LightGBM']
+            else:  # LONG_TERM
+                # Conservative models for long-term
+                model_names = ['LinearRegression', 'Ridge', 'RandomForest', 'GradientBoosting', 'XGBoost', 'LightGBM', 'CatBoost']
+            
+            for model_name in model_names:
+                # Look for models with horizon prefix (e.g., 'intraday_LinearRegression')
+                horizon_prefix = horizon.value
+                prefixed_model_name = f"{horizon_prefix}_{model_name}"
+                
+                if prefixed_model_name in models:
+                    try:
+                        model_data = models[prefixed_model_name]
+                        # Extract the actual model from the model data
+                        if isinstance(model_data, dict) and 'model' in model_data:
+                            model = model_data['model']
+                        else:
+                            model = model_data
+                            
+                        if hasattr(model, 'predict'):
+                            prediction = model.predict(features)[0]
+                            model_predictions[model_name] = {
+                                'prediction': prediction,
+                                'confidence': 0.8,  # Default confidence
+                                'horizon': horizon.value,
+                                'days': days
+                            }
+                    except Exception as e:
+                        self.logger.warning(f"Model {prefixed_model_name} prediction failed for {description}: {e}")
+                        continue
+            
+            if not model_predictions:
+                self.logger.warning(f"No model predictions available for {description}")
+                return {}
+            
+            # Calculate ensemble prediction
+            predictions = [pred['prediction'] for pred in model_predictions.values()]
+            ensemble_prediction = np.mean(predictions)
+            
+            # Calculate confidence based on model agreement
+            prediction_std = np.std(predictions)
+            confidence = max(0.1, min(0.95, 1.0 - (prediction_std / ensemble_prediction) if ensemble_prediction != 0 else 0.5))
+            
+            # Generate expected price with currency formatting
+            current_price = data['Close'].iloc[-1] if 'Close' in data.columns else 100.0
+            expected_price = current_price * (1 + ensemble_prediction / 100)
+            
+            return {
+                'horizon': horizon.value,
+                'days': days,
+                'description': description,
+                'ensemble_prediction': ensemble_prediction,
+                'expected_price': expected_price,
+                'current_price': current_price,
+                'confidence': confidence,
+                'model_predictions': model_predictions,
+                'interval_config': interval_config,
+                'feature_strategy': feature_strategy,
+                'prediction_change': ensemble_prediction,
+                'prediction_change_percent': f"{ensemble_prediction:.2f}%",
+                'expected_price_formatted': f"{self.currency_symbol}{expected_price:,.2f}"
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to generate horizon predictions for {description}: {e}")
+            return {}
+    
+    def _create_multi_horizon_ensemble_predictions(self, multi_interval_predictions: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create ensemble predictions across different horizons
+        
+        Args:
+            multi_interval_predictions: Predictions from all horizons
+            
+        Returns:
+            Ensemble prediction results
+        """
+        try:
+            if not multi_interval_predictions:
+                return {}
+            
+            # Horizon weights for ensemble
+            horizon_weights = {
+                'Intraday (1 day)': 0.1,
+                'Short-term (1 week)': 0.2,
+                'Short-term (1 month)': 0.3,
+                'Medium-term (3 months)': 0.25,
+                'Long-term (6 months)': 0.1,
+                'Long-term (1 year)': 0.05
+            }
+            
+            # Calculate weighted ensemble
+            weighted_predictions = []
+            total_weight = 0
+            
+            for horizon, predictions in multi_interval_predictions.items():
+                if predictions and 'ensemble_prediction' in predictions:
+                    weight = horizon_weights.get(horizon, 0.1)
+                    prediction = predictions['ensemble_prediction']
+                    weighted_predictions.append(prediction * weight)
+                    total_weight += weight
+            
+            if not weighted_predictions:
+                return {}
+            
+            # Calculate ensemble metrics
+            ensemble_prediction = sum(weighted_predictions) / total_weight if total_weight > 0 else 0
+            ensemble_confidence = np.mean([pred.get('confidence', 0.5) for pred in multi_interval_predictions.values()])
+            
+            return {
+                'ensemble_prediction': ensemble_prediction,
+                'ensemble_confidence': ensemble_confidence,
+                'horizon_weights': horizon_weights,
+                'total_weight': total_weight,
+                'description': 'Multi-horizon weighted ensemble prediction'
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create multi-horizon ensemble: {e}")
+            return {}

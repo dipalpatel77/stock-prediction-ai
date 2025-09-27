@@ -10,9 +10,10 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 
 # Import core services
-from src.core import DataService
-from src.core.database_service import DatabaseService
-from src.core.enhanced_angel_one_service import EnhancedAngelOneService
+# Use existing services from main.services
+from .data_service import DataService
+from .database_manager import DatabaseManager
+from .angel_one_manager import AngelOneManager
 # Smart data fetcher removed (duplicate functionality)
 
 logger = logging.getLogger(__name__)
@@ -31,18 +32,32 @@ class DataServiceWrapper:
         self.config = config
         self.data_service = DataService(use_database=True)
         self.angel_service = None
-        self.database_service = DatabaseService()
+        self.database_service = DatabaseManager()
         # Smart data fetcher removed (duplicate functionality)
         self.smart_fetcher = None
         
-        # Initialize Angel One service if Indian stock
-        if self._is_indian_stock(ticker):
-            try:
-                self.angel_service = EnhancedAngelOneService()
-                logger.info(f"Angel One service initialized for {ticker}")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Angel One service: {e}")
-                self.angel_service = None
+        # Initialize Angel One service - try dynamic lookup first
+        try:
+            self.angel_service = AngelOneManager(config)
+            # Check if this is an Indian stock using dynamic lookup
+            if hasattr(self.angel_service, 'angel_service') and hasattr(self.angel_service.angel_service, 'dynamic_lookup'):
+                token, exchange = self.angel_service.angel_service.get_dynamic_token_and_exchange(ticker)
+                if not token or not exchange:
+                    # Not an Indian stock, set manager to None
+                    self.angel_service = None
+                    logger.info(f"{ticker} not found in Indian stocks, using Yahoo Finance")
+                else:
+                    logger.info(f"{ticker} found as Indian stock: Token={token}, Exchange={exchange}")
+            else:
+                # Fallback to hardcoded check
+                if self._is_indian_stock(ticker):
+                    logger.info(f"{ticker} found as Indian stock (hardcoded)")
+                else:
+                    self.angel_service = None
+                    logger.info(f"{ticker} not found in hardcoded Indian stocks")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Angel One manager: {e}")
+            self.angel_service = None
     
     def load_stock_data(self, period: str, interval: str = 'ONE_DAY', force_refresh: bool = False) -> pd.DataFrame:
         """
@@ -77,27 +92,20 @@ class DataServiceWrapper:
             data = None
             success = False
             
-            if self._is_indian_stock(self.ticker):
-                # For Indian stocks, use ONLY Angel One API
-                if not self.angel_service:
-                    raise Exception(f"Angel One service not available for Indian stock {self.ticker}. Please configure Angel One API.")
-                
-                data = self._load_angel_one_data(period, interval)
-                if data is not None and not data.empty:
-                    logger.info(f"Successfully loaded {len(data)} records from Angel One for Indian stock {self.ticker}")
-                    success = True
-                else:
-                    raise Exception(f"Failed to load data from Angel One for Indian stock {self.ticker}. Angel One API is required for Indian stocks.")
+            # System now only supports Indian stocks
+            if not self._is_indian_stock(self.ticker):
+                raise Exception(f"Only Indian stocks are supported. {self.ticker} is not an Indian stock. Please use stocks like RELIANCE, TCS, INFY, etc.")
+            
+            # For Indian stocks, use ONLY Angel One API
+            if not self.angel_service:
+                raise Exception(f"Angel One service not available for Indian stock {self.ticker}. Please configure Angel One API.")
+            
+            data = self._load_angel_one_data(period, interval)
+            if data is not None and not data.empty:
+                logger.info(f"Successfully loaded {len(data)} records from Angel One for Indian stock {self.ticker}")
+                success = True
             else:
-                # For US/International stocks, use Yahoo Finance
-                data = self._load_yahoo_finance_data(period)
-                if data is not None and not data.empty:
-                    logger.info(f"Successfully loaded {len(data)} records from Yahoo Finance for {self.ticker}")
-                    success = True
-                else:
-                    logger.warning("Yahoo Finance data empty, trying basic data service")
-                    data = self._load_basic_data(period)
-                    success = data is not None and not data.empty
+                raise Exception(f"Failed to load data from Angel One for Indian stock {self.ticker}. Angel One API is required for Indian stocks.")
             
             # Record the fetch attempt
             self.smart_fetcher.record_fetch(self.ticker, interval, success)
@@ -563,9 +571,31 @@ class DataServiceWrapper:
         Returns:
             Data source name ('angel_one' or 'yahoo_finance')
         """
-        if self._is_indian_stock(self.ticker) and self.angel_service:
+        logger.info(f"🔍 Determining data source for {self.ticker}")
+        
+        # Use dynamic lookup if Angel One service is available
+        if self.angel_service and hasattr(self.angel_service, 'angel_service'):
+            if hasattr(self.angel_service.angel_service, 'dynamic_lookup'):
+                token, exchange = self.angel_service.angel_service.get_dynamic_token_and_exchange(self.ticker)
+                if token and exchange:
+                    logger.info(f"✅ Dynamic lookup confirms {self.ticker} is Indian stock: Token={token}, Exchange={exchange}")
+                    return 'angel_one'
+                else:
+                    logger.warning(f"❌ Dynamic lookup failed for {self.ticker}")
+            else:
+                logger.warning(f"❌ Dynamic lookup not available for {self.ticker}")
+        else:
+            logger.warning(f"❌ Angel One service not available for {self.ticker}")
+        
+        # Fallback to hardcoded check
+        is_indian = self._is_indian_stock(self.ticker)
+        logger.info(f"🔍 Hardcoded check for {self.ticker}: is_indian={is_indian}, angel_service={self.angel_service is not None}")
+        
+        if is_indian and self.angel_service:
+            logger.info(f"✅ Using Angel One for {self.ticker} (hardcoded)")
             return 'angel_one'
         else:
+            logger.info(f"❌ Using Yahoo Finance for {self.ticker}")
             return 'yahoo_finance'
     
     def store_data_in_database(self, data: pd.DataFrame, interval: str = 'ONE_DAY'):
@@ -645,15 +675,20 @@ class DataServiceWrapper:
                         return data
                 except Exception as e:
                     logger.warning(f"Angel One data loading failed: {e}")
+                    # For Indian stocks, don't fallback to Yahoo Finance
+                    # since we have dynamic lookup that should work
+                    logger.error(f"No fallback for Indian stock {self.ticker} - Angel One should work with dynamic lookup")
+                    return pd.DataFrame()
             
-            # Fallback to Yahoo Finance
-            try:
-                data = self.data_service.get_stock_data(self.ticker, period, interval)
-                if not data.empty:
-                    logger.info(f"Loaded data from Yahoo Finance for {self.ticker}")
-                    return data
-            except Exception as e:
-                logger.error(f"Yahoo Finance data loading failed: {e}")
+            # For non-Indian stocks, try Yahoo Finance
+            if not self._is_indian_stock(self.ticker):
+                try:
+                    data = self.data_service.get_stock_data(self.ticker, period, interval)
+                    if not data.empty:
+                        logger.info(f"Loaded data from Yahoo Finance for {self.ticker}")
+                        return data
+                except Exception as e:
+                    logger.error(f"Yahoo Finance data loading failed: {e}")
             
             # Final fallback - return empty DataFrame
             logger.warning(f"All data sources failed for {self.ticker}")

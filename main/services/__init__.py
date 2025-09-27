@@ -6,6 +6,7 @@ Essential services for the stock prediction pipeline
 
 from .data_service_wrapper import DataServiceWrapper
 from .angel_one_manager import AngelOneManager
+from .angel_one_service import AngelOneService
 from .database_manager import DatabaseManager
 from .api_coordinator import APICoordinator
 from .technical_indicators_service import TechnicalIndicatorsService
@@ -18,10 +19,12 @@ from .incremental_service import IncrementalService
 from .model_service import ModelService
 from .multi_exchange_data_service import MultiExchangeDataService
 from .report_generator import ReportGenerator
+from .interval_manager import IntervalManager
 
 __all__ = [
     'DataServiceWrapper',
-    'AngelOneManager', 
+    'AngelOneManager',
+    'AngelOneService',
     'DatabaseManager',
     'APICoordinator',
     'TechnicalIndicatorsService',
@@ -33,5 +36,6 @@ __all__ = [
     'IncrementalService',
     'ModelService',
     'MultiExchangeDataService',
-    'ReportGenerator'
+    'ReportGenerator',
+    'IntervalManager'
 ]

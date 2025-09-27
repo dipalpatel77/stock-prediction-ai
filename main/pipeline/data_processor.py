@@ -23,6 +23,7 @@ from ..services.data_service_wrapper import DataServiceWrapper
 from ..services.angel_one_manager import AngelOneManager
 from ..services.database_manager import DatabaseManager
 from ..services.api_coordinator import APICoordinator
+from ..services.incremental_update_service import IncrementalUpdateService
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class DataProcessor(BasePipelineComponent):
                 'enable_streaming': True,
                 'enable_memory_monitoring': True
             }
-        super().__init__(ticker, config)
+        super().__init__("data_processor", ticker, config)
         
         # Memory optimization settings
         self.memory_limit = config.get('memory_limit_mb', 1024) * 1024 * 1024  # Convert to bytes
@@ -57,6 +58,9 @@ class DataProcessor(BasePipelineComponent):
             'memory_peak': 0
         }
         
+        # Prevent multiple database calls
+        self._data_loading_in_progress = False
+        
         # Thread pool for parallel processing
         self.thread_pool = ThreadPoolExecutor(max_workers=4)
         self.memory_lock = threading.Lock()
@@ -71,9 +75,43 @@ class DataProcessor(BasePipelineComponent):
         
         # Initialize service integrations
         self.data_wrapper = DataServiceWrapper(ticker, config)
+        self.incremental_service = IncrementalUpdateService(config)
         # Extract ticker string from config if it's a dictionary
-        ticker_str = ticker if isinstance(ticker, str) else config.get('ticker', 'UNKNOWN')
-        self.angel_manager = AngelOneManager(config) if self._is_indian_stock(ticker_str) else None
+        if isinstance(ticker, str):
+            ticker_str = ticker
+        else:
+            # If ticker is a dict, try to extract the string ticker
+            if isinstance(ticker, dict):
+                ticker_str = ticker.get('ticker', config.get('ticker', 'UNKNOWN'))
+            else:
+                ticker_str = config.get('ticker', 'UNKNOWN')
+        
+        # Ensure ticker_str is a string
+        if not isinstance(ticker_str, str):
+            ticker_str = str(ticker_str)
+            
+        # Initialize Angel One manager first, then check if it's an Indian stock
+        try:
+            self.angel_manager = AngelOneManager(config)
+            # Check if this is an Indian stock using dynamic lookup
+            if hasattr(self.angel_manager, 'angel_service') and hasattr(self.angel_manager.angel_service, 'dynamic_lookup'):
+                token, exchange = self.angel_manager.angel_service.get_dynamic_token_and_exchange(ticker_str)
+                if not token or not exchange:
+                    # Not an Indian stock, set manager to None
+                    self.angel_manager = None
+                    logger.info(f"{ticker_str} not found in Indian stocks, using Yahoo Finance")
+                else:
+                    logger.info(f"{ticker_str} found as Indian stock: Token={token}, Exchange={exchange}")
+            else:
+                # Fallback to hardcoded check
+                if self._is_indian_stock_hardcoded(ticker_str):
+                    logger.info(f"{ticker_str} found as Indian stock (hardcoded)")
+                else:
+                    self.angel_manager = None
+                    logger.info(f"{ticker_str} not found in hardcoded Indian stocks")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Angel One manager: {e}")
+            self.angel_manager = None
         self.db_manager = DatabaseManager(config)
         self.api_coordinator = APICoordinator()
         
@@ -82,9 +120,20 @@ class DataProcessor(BasePipelineComponent):
         
         logger.info(f"Optimized DataProcessor initialized for {ticker} with memory monitoring and async support")
     
+    def _is_indian_stock_hardcoded(self, ticker: str) -> bool:
+        """Hardcoded check for Indian stocks as fallback"""
+        indian_stocks = [
+            'RELIANCE', 'TCS', 'INFY', 'HDFC', 'HDFCBANK', 'ICICIBANK', 'KOTAKBANK',
+            'BHARTIARTL', 'ITC', 'SBIN', 'ASIANPAINT', 'MARUTI', 'AXISBANK',
+            'NESTLEIND', 'ULTRACEMCO', 'SUNPHARMA', 'TITAN', 'POWERGRID', 'NTPC',
+            'COALINDIA', 'TECHM', 'WIPRO', 'ONGC', 'BAJFINANCE', 'DRREDDY', 'CIPLA',
+            'DIVISLAB', 'BIOCON', 'LUPIN', 'GIPCL', 'ADANIPORTS'
+        ]
+        return ticker.upper() in indian_stocks
+    
     def _is_indian_stock(self, ticker: str) -> bool:
         """
-        Check if ticker is an Indian stock
+        Check if ticker is an Indian stock using dynamic lookup
         
         Args:
             ticker: Stock ticker symbol
@@ -93,10 +142,26 @@ class DataProcessor(BasePipelineComponent):
             True if Indian stock, False otherwise
         """
         try:
-            indian_indicators = ['.NS', '.BO', '.NSE', '.BSE']
-            return any(ticker.endswith(indicator) for indicator in indian_indicators)
+            # Use dynamic lookup to check if stock exists in Angel One symbols
+            if hasattr(self, 'angel_manager') and self.angel_manager:
+                # Check if Angel One service has dynamic lookup capability
+                if hasattr(self.angel_manager, 'angel_service') and hasattr(self.angel_manager.angel_service, 'dynamic_lookup'):
+                    token, exchange = self.angel_manager.angel_service.get_dynamic_token_and_exchange(ticker)
+                    if token and exchange:
+                        logger.info(f"Dynamic lookup found {ticker} as Indian stock: Token={token}, Exchange={exchange}")
+                        return True
+                    else:
+                        logger.info(f"Dynamic lookup did not find {ticker} in Indian stocks")
+                        return False
+                else:
+                    logger.warning("Angel One service does not have dynamic lookup capability")
+                    return False
+            else:
+                logger.warning("Angel One manager not available for dynamic lookup")
+                return False
+                
         except Exception as e:
-            logger.error(f"Failed to check if Indian stock: {e}")
+            logger.error(f"Failed to check if Indian stock using dynamic lookup: {e}")
             return False
     
     def _initialize_data_services(self):
@@ -184,23 +249,32 @@ class DataProcessor(BasePipelineComponent):
             period = kwargs.get('period', '1y')
             interval = kwargs.get('interval', 'ONE_DAY')
             
-            # For Indian stocks, load comprehensive data for all intervals
-            if self._is_indian_stock(self.ticker):
-                print(f"\n📊 Loading comprehensive data for {self.ticker} (Indian stock)")
-                comprehensive_data = self._load_comprehensive_angel_one_data(period)
-                if comprehensive_data:
-                    # Use ONE_DAY data as primary for processing
-                    raw_data = comprehensive_data.get('ONE_DAY')
-                    if raw_data is None or raw_data.empty:
-                        # Fallback to any available interval
-                        raw_data = next(iter(comprehensive_data.values()), None)
-                    print(f"✅ Comprehensive data loaded: {len(comprehensive_data)} intervals")
-                else:
-                    print("⚠️ Comprehensive data failed, falling back to standard loading")
-                    raw_data = self._load_stock_data(period, interval)
+            # System now only supports Indian stocks
+            # Ensure ticker is a string
+            ticker_str = self.ticker if isinstance(self.ticker, str) else str(self.ticker)
+            
+            # Check if it's an Indian stock
+            if not self._is_indian_stock(ticker_str):
+                return self._handle_error(
+                    ValueError(f"Only Indian stocks are supported. {ticker_str} is not an Indian stock. Please use stocks like RELIANCE, TCS, INFY, etc."), 
+                    "Stock validation"
+                )
+            
+            print(f"\n📊 Loading data for {self.ticker} with intelligent caching (Indian stock)")
+            comprehensive_data = self._load_data_with_cache(period)
+            if comprehensive_data:
+                # Use ONE_DAY data as primary for processing
+                raw_data = comprehensive_data.get('ONE_DAY')
+                if raw_data is None or raw_data.empty:
+                    # Fallback to any available interval
+                    raw_data = next(iter(comprehensive_data.values()), None)
+                print(f"✅ Data loaded: {len(comprehensive_data)} intervals")
             else:
-                # For non-Indian stocks, use standard loading
-                raw_data = self._load_stock_data(period, interval)
+                # No fallback to sample data - fail completely when no Angel One data is available
+                return self._handle_error(
+                    ValueError(f"No data available for {self.ticker} in Angel One API. Please check if the stock symbol is correct and try again."), 
+                    "Data loading"
+                )
             
             if raw_data is None or raw_data.empty:
                 return self._handle_error(ValueError("No data loaded"), "Data loading")
@@ -245,7 +319,8 @@ class DataProcessor(BasePipelineComponent):
                 'data_source': self._get_data_source(),
                 'processing_summary': self._get_processing_summary(raw_data, enriched_data),
                 'records_processed': len(enriched_data) if enriched_data is not None else 0,
-                'quality_score': quality_metrics.get('overall_score', 0) * 100 if quality_metrics else 0
+                'quality_score': quality_metrics.get('overall_score', 0) * 100 if quality_metrics else 0,
+                'multi_interval_data': comprehensive_data  # Add comprehensive data for multi-interval training
             }
             
             self.logger.info(f"Data processor returning: data={enriched_data is not None}, shape={enriched_data.shape if enriched_data is not None else 'None'}")
@@ -329,7 +404,7 @@ class DataProcessor(BasePipelineComponent):
             )
             
             if data is not None and not data.empty:
-                self._log_progress(f"Retrieved {len(data)} cached records")
+                self._log_progress(f"Retrieved {len(data)} cached records for {interval}")
                 return data
             
             return None
@@ -337,6 +412,99 @@ class DataProcessor(BasePipelineComponent):
         except Exception as e:
             self._log_progress(f"Cache retrieval failed: {e}")
             return None
+    
+    def _is_cache_fresh(self, data: pd.DataFrame, max_age_hours: int = 24) -> bool:
+        """Check if cached data is fresh enough"""
+        try:
+            if data.empty:
+                return False
+                
+            last_update = data.index.max()
+            age_hours = (datetime.now() - last_update).total_seconds() / 3600
+            
+            return age_hours < max_age_hours
+            
+        except Exception as e:
+            self._log_progress(f"Cache freshness check failed: {e}")
+            return False
+    
+    def _needs_incremental_update(self, cached_data: pd.DataFrame) -> bool:
+        """Check if incremental update is needed"""
+        try:
+            last_date = cached_data.index.max()
+            days_since_update = (datetime.now() - last_date).days
+            
+            # Update if data is older than 1 day
+            return days_since_update > 1
+            
+        except Exception as e:
+            self._log_progress(f"Incremental update check failed: {e}")
+            return True
+    
+    def _download_incremental_data(self, interval: str, cached_data: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Download only new data since last update"""
+        try:
+            if not self.angel_manager:
+                return None
+                
+            last_date = cached_data.index.max()
+            
+            # Use the new incremental data method
+            new_data = self.angel_manager.get_incremental_data(
+                self.ticker,
+                interval,
+                last_date
+            )
+            
+            return new_data
+            
+        except Exception as e:
+            self._log_progress(f"Incremental download failed: {e}")
+            return None
+    
+    def _perform_intelligent_update(self, interval: str, cached_data: pd.DataFrame):
+        """Perform intelligent incremental update using the incremental service"""
+        try:
+            if not self.angel_manager:
+                self._log_progress("Angel One manager not available for incremental update")
+                return None
+            
+            # Use incremental service to perform update
+            update_result = self.incremental_service.perform_incremental_update(
+                ticker=self.ticker,
+                interval=interval,
+                existing_data=cached_data,
+                angel_manager=self.angel_manager
+            )
+            
+            if update_result.success:
+                # Store the updated data
+                self._store_data_in_database(update_result.merged_data, interval)
+                return update_result
+            else:
+                self._log_progress(f"Incremental update failed: {update_result.error_message}")
+                return None
+                
+        except Exception as e:
+            self._log_progress(f"Intelligent update failed: {e}")
+            return None
+    
+    def _merge_data(self, existing_data: pd.DataFrame, new_data: pd.DataFrame) -> pd.DataFrame:
+        """Merge existing and new data"""
+        try:
+            if new_data.empty:
+                return existing_data
+                
+            # Combine data and remove duplicates
+            combined_data = pd.concat([existing_data, new_data])
+            combined_data = combined_data[~combined_data.index.duplicated(keep='last')]
+            combined_data = combined_data.sort_index()
+            
+            return combined_data
+            
+        except Exception as e:
+            self._log_progress(f"Data merging failed: {e}")
+            return existing_data
     
     def _load_angel_one_data(self, period: str, interval: str) -> Optional[pd.DataFrame]:
         """
@@ -360,9 +528,61 @@ class DataProcessor(BasePipelineComponent):
             self._log_progress(f"Angel One data loading failed: {e}")
             return None
     
+    def _load_data_with_cache(self, period: str) -> Dict[str, pd.DataFrame]:
+        """
+        Load data with intelligent caching strategy
+        
+        Args:
+            period: Data period
+            
+        Returns:
+            Dictionary with interval as key and DataFrame as value
+        """
+        try:
+            comprehensive_data = {}
+            intervals = ['ONE_DAY', 'ONE_HOUR', 'FIFTEEN_MINUTE', 'FIVE_MINUTE']
+            
+            for interval in intervals:
+                self._log_progress(f"Processing {interval} data...")
+                
+                # Check cache first
+                cached_data = self._get_cached_data(period, interval)
+                
+                if cached_data is not None and not cached_data.empty:
+                    # Check if cache is fresh
+                    if self._is_cache_fresh(cached_data):
+                        self._log_progress(f"✅ Using fresh cached data for {interval}")
+                        comprehensive_data[interval] = cached_data
+                        continue
+                    
+                    # Check if incremental update is needed
+                    if self._needs_incremental_update(cached_data):
+                        self._log_progress(f"🔄 Performing intelligent incremental update for {interval}")
+                        update_result = self._perform_intelligent_update(interval, cached_data)
+                        if update_result and update_result.success:
+                            comprehensive_data[interval] = update_result.merged_data
+                            self._log_progress(f"✅ Incremental update completed for {interval}: {update_result.records_added} new records")
+                            continue
+                
+                # Download fresh data
+                self._log_progress(f"📥 Downloading fresh data for {interval}")
+                fresh_data = self._load_angel_one_data(period, interval)
+                if fresh_data is not None and not fresh_data.empty:
+                    self._store_data_in_database(fresh_data, interval)
+                    comprehensive_data[interval] = fresh_data
+                    self._log_progress(f"✅ Fresh data downloaded for {interval}")
+                else:
+                    self._log_progress(f"❌ Failed to download data for {interval}")
+            
+            return comprehensive_data
+            
+        except Exception as e:
+            self._log_progress(f"Cache-first data loading failed: {e}")
+            return {}
+    
     def _load_comprehensive_angel_one_data(self, period: str) -> Dict[str, pd.DataFrame]:
         """
-        Load comprehensive Angel One data for all intervals
+        Load comprehensive Angel One data for all intervals (DEPRECATED - use _load_data_with_cache)
         
         Args:
             period: Data period
@@ -375,11 +595,11 @@ class DataProcessor(BasePipelineComponent):
                 self._log_progress("Angel One manager not available")
                 return {}
             
-            # Use comprehensive data loading
-            comprehensive_data = self.angel_manager.get_comprehensive_historical_data(
+            # Use comprehensive data loading with multiple intervals
+            intervals = ['ONE_DAY', 'ONE_HOUR', 'FIFTEEN_MINUTE', 'FIVE_MINUTE']
+            comprehensive_data = self.angel_manager.get_multiple_intervals_data(
                 self.ticker, 
-                self.angel_manager.config.get('exchange', 'NSE'), 
-                period
+                intervals
             )
             
             if comprehensive_data:
@@ -392,6 +612,7 @@ class DataProcessor(BasePipelineComponent):
         except Exception as e:
             self._log_progress(f"Comprehensive Angel One data loading failed: {e}")
             return {}
+    
     
     def _load_yahoo_data(self, period: str, interval: str) -> pd.DataFrame:
         """

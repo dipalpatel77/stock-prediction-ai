@@ -30,44 +30,27 @@ from ..services.technical_indicators_service import TechnicalIndicatorsService
 from ..services.feature_engineering_service import FeatureEngineeringService
 
 # Import strategy and analysis services
+# Use existing services from main.services
 try:
-    from src.core.strategy_service import StrategyService
-except ImportError:
-    logger.warning("StrategyService not available, using placeholder")
-    StrategyService = None
-
-try:
-    from src.core.fred_api_service import FredApiService
+    from ..services.fred_api_service import FREDAPIService as FredApiService
 except ImportError:
     logger.warning("FredApiService not available, using placeholder")
     FredApiService = None
 
 try:
-    from src.core.geopolitical_risk_service import GeopoliticalRiskService
-except ImportError:
-    logger.warning("GeopoliticalRiskService not available, using placeholder")
-    GeopoliticalRiskService = None
-
-try:
-    from src.core.global_market_service import GlobalMarketService
+    from ..services.global_market_service import GlobalMarketService
 except ImportError:
     logger.warning("GlobalMarketService not available, using placeholder")
     GlobalMarketService = None
 
-try:
-    from src.core.corporate_action_service import CorporateActionService
-except ImportError:
-    logger.warning("CorporateActionService not available, using placeholder")
-    CorporateActionService = None
+# Placeholder services (removed during cleanup)
+StrategyService = None
+GeopoliticalRiskService = None
+CorporateActionService = None
+InsiderTradingService = None
 
 try:
-    from src.core.insider_trading_service import InsiderTradingService
-except ImportError:
-    logger.warning("InsiderTradingService not available, using placeholder")
-    InsiderTradingService = None
-
-try:
-    from src.core.currency_service import CurrencyService
+    from ..services.currency_service import CurrencyService
 except ImportError:
     logger.warning("CurrencyService not available, using placeholder")
     CurrencyService = None
@@ -100,7 +83,7 @@ class StrategyAnalyzer(BasePipelineComponent):
             ticker: Stock ticker symbol
             config: Configuration dictionary
         """
-        super().__init__(ticker, config)
+        super().__init__("strategy_analyzer", ticker, config)
         
         # Initialize core services
         # Economic data service removed
@@ -256,7 +239,15 @@ class StrategyAnalyzer(BasePipelineComponent):
             logger.info("Running sentiment analysis...")
             
             # Get sentiment data from economic service
-            sentiment_data = self.economic_service.get_sentiment_indicators()
+            if self.economic_service is not None:
+                sentiment_data = self.economic_service.get_sentiment_indicators()
+            else:
+                logger.warning("Economic service not available, using placeholder sentiment data")
+                sentiment_data = {
+                    'market_sentiment': 0.5,
+                    'confidence': 0.3,
+                    'source': 'placeholder'
+                }
             
             # Analyze news sentiment (placeholder)
             news_sentiment = self._analyze_news_sentiment()
@@ -325,7 +316,17 @@ class StrategyAnalyzer(BasePipelineComponent):
             logger.info("Running economic indicators analysis...")
             
             # Get economic indicators from economic service
-            economic_data = self.economic_service.get_economic_indicators()
+            if self.economic_service is not None:
+                economic_data = self.economic_service.get_economic_indicators()
+            else:
+                logger.warning("Economic service not available, using placeholder economic data")
+                economic_data = {
+                    'gdp_growth': 2.5,
+                    'inflation_rate': 3.2,
+                    'unemployment_rate': 4.1,
+                    'interest_rate': 5.25,
+                    'source': 'placeholder'
+                }
             
             # Analyze GDP trends
             gdp_analysis = self._analyze_gdp_trends(economic_data)
@@ -672,8 +673,8 @@ class StrategyAnalyzer(BasePipelineComponent):
     def _create_strategy_service_placeholder(self):
         """Create placeholder strategy service"""
         class PlaceholderStrategyService:
-            def get_strategy_recommendations(self, data): return {'recommendations': []}
-            def run_backtesting(self, data): return {'results': {}}
+            def get_strategy_recommendations(self, ticker, data): return {'recommendations': []}
+            def run_backtesting(self, ticker, strategy_type, data): return {'results': {}}
         return PlaceholderStrategyService()
     
     def _create_fred_service_placeholder(self):

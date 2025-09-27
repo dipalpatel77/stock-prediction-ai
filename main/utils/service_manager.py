@@ -21,59 +21,45 @@ from ..services.technical_indicators_service import TechnicalIndicatorsService
 from ..services.feature_engineering_service import FeatureEngineeringService
 
 # Import core services
+# Use existing services from main.services
 try:
-    from src.core.strategy_service import StrategyService
-except ImportError:
-    logger.warning("StrategyService not available, using placeholder")
-    StrategyService = None
-
-try:
-    from src.core.model_service import ModelService
+    from ..services.model_service import ModelService
 except ImportError:
     logger.warning("ModelService not available, using placeholder")
     ModelService = None
 
 try:
-    from src.core.reporting_service import ReportingService
+    from ..services.report_generator import ReportGenerator as ReportingService
 except ImportError:
     logger.warning("ReportingService not available, using placeholder")
     ReportingService = None
 
 try:
-    from src.core.fred_api_service import FredApiService
+    from ..services.fred_api_service import FREDAPIService as FredApiService
 except ImportError:
     logger.warning("FredApiService not available, using placeholder")
     FredApiService = None
 
-try:
-    from src.core.geopolitical_risk_service import GeopoliticalRiskService
-except ImportError:
-    logger.warning("GeopoliticalRiskService not available, using placeholder")
-    GeopoliticalRiskService = None
+# Strategy service placeholder
+StrategyService = None
 
+# Use existing services from main.services
 try:
-    from src.core.global_market_service import GlobalMarketService
+    from ..services.global_market_service import GlobalMarketService
 except ImportError:
     logger.warning("GlobalMarketService not available, using placeholder")
     GlobalMarketService = None
 
 try:
-    from src.core.corporate_action_service import CorporateActionService
-except ImportError:
-    logger.warning("CorporateActionService not available, using placeholder")
-    CorporateActionService = None
-
-try:
-    from src.core.insider_trading_service import InsiderTradingService
-except ImportError:
-    logger.warning("InsiderTradingService not available, using placeholder")
-    InsiderTradingService = None
-
-try:
-    from src.core.currency_service import CurrencyService
+    from ..services.currency_service import CurrencyService
 except ImportError:
     logger.warning("CurrencyService not available, using placeholder")
     CurrencyService = None
+
+# Placeholder services (removed during cleanup)
+GeopoliticalRiskService = None
+CorporateActionService = None
+InsiderTradingService = None
 
 
 class ServiceManager:

@@ -6,12 +6,13 @@ Manages Angel One API operations with rate limiting and caching
 
 import pandas as pd
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 
 # Import core services
-from src.core.enhanced_angel_one_service import EnhancedAngelOneService
-from src.core.angel_one_database_schema import AngelOneDatabaseSchema
+# These services are now integrated into AngelOneManager itself
+# from src.core.enhanced_angel_one_service import EnhancedAngelOneService
+# from src.core.angel_one_database_schema import AngelOneDatabaseSchema
 from main.utils.rate_limiter import get_api_rate_limiter
 
 logger = logging.getLogger(__name__)
@@ -21,11 +22,13 @@ class AngelOneManager:
     
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.angel_service = EnhancedAngelOneService()
+        # Initialize Angel One service with real API functionality
+        from .angel_one_service import AngelOneService
+        self.angel_service = AngelOneService(config)
         
         # Initialize database schema with connection string
         connection_string = config.get('connection_string', 'sqlite:///angel_one.db')
-        self.db_schema = AngelOneDatabaseSchema(connection_string)
+        self.db_schema = None  # Will be implemented with actual database schema
         
         # Set up actual Angel One credentials
         self.api_key = config.get('api_key', '1TKgQThc ')
@@ -59,6 +62,56 @@ class AngelOneManager:
         self.base_url = "https://apiconnect.angelone.in"
         
         logger.info("Angel One Manager initialized")
+    
+    def get_historical_data(self, symbol: str, interval: str = 'ONE_DAY', 
+                           from_date: str = None, to_date: str = None, 
+                           days: int = 30) -> Optional[pd.DataFrame]:
+        """
+        Get historical data using the Angel One service
+        
+        Args:
+            symbol: Stock symbol
+            interval: Data interval
+            from_date: Start date
+            to_date: End date
+            days: Number of days to fetch
+            
+        Returns:
+            DataFrame with historical data
+        """
+        if self.angel_service:
+            return self.angel_service.get_historical_data(symbol, interval, from_date, to_date, days)
+        else:
+            logger.error("Angel One service not initialized")
+            return None
+    
+    def get_multiple_intervals_data(self, symbol: str, intervals: List[str] = None) -> Dict[str, pd.DataFrame]:
+        """
+        Get data for multiple intervals
+        
+        Args:
+            symbol: Stock symbol
+            intervals: List of intervals to fetch
+            
+        Returns:
+            Dictionary with interval as key and DataFrame as value
+        """
+        if self.angel_service:
+            return self.angel_service.get_multiple_intervals_data(symbol, intervals)
+        else:
+            logger.error("Angel One service not initialized")
+            return {}
+    
+    def is_configured(self) -> bool:
+        """
+        Check if Angel One is properly configured
+        
+        Returns:
+            True if configured, False otherwise
+        """
+        if self.angel_service:
+            return self.angel_service.is_configured()
+        return False
     
     def check_rate_limit(self, interval: str = 'ONE_DAY') -> bool:
         """
@@ -479,8 +532,12 @@ class AngelOneManager:
             # Check cache first
             cached_data = self.get_cached_data(ticker, period, interval)
             if cached_data is not None and not cached_data.empty:
-                logger.info(f"Using cached data for {ticker}")
-                return cached_data
+                # Check if cache is fresh
+                if self._is_cache_fresh(cached_data):
+                    logger.info(f"Using fresh cached data for {ticker}")
+                    return cached_data
+                else:
+                    logger.info(f"Cached data is stale for {ticker}, will update")
             
             # Apply rate limiting and fetch data
             data = self.rate_limiter.call_with_retry(
@@ -595,6 +652,52 @@ class AngelOneManager:
         except Exception as e:
             logger.error(f"Failed to get cached Angel One data: {e}")
             return None
+    
+    def get_incremental_data(self, ticker: str, interval: str, last_date: datetime) -> Optional[pd.DataFrame]:
+        """
+        Get incremental data since last update
+        
+        Args:
+            ticker: Stock ticker symbol
+            interval: Data interval
+            last_date: Last date in the existing data
+            
+        Returns:
+            DataFrame with new data or None if failed
+        """
+        try:
+            if not self.angel_service:
+                logger.error("Angel One service not initialized")
+                return None
+            
+            # Get incremental data from Angel One service
+            data = self.angel_service.get_incremental_data(ticker, interval, last_date)
+            
+            if data is not None and not data.empty:
+                logger.info(f"Retrieved {len(data)} incremental records for {ticker}")
+                return data
+            else:
+                logger.info(f"No incremental data available for {ticker}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            logger.error(f"Failed to get incremental data for {ticker}: {e}")
+            return None
+    
+    def _is_cache_fresh(self, data: pd.DataFrame, max_age_hours: int = 24) -> bool:
+        """Check if cached data is fresh enough"""
+        try:
+            if data.empty:
+                return False
+                
+            last_update = data.index.max()
+            age_hours = (datetime.now() - last_update).total_seconds() / 3600
+            
+            return age_hours < max_age_hours
+            
+        except Exception as e:
+            logger.error(f"Cache freshness check failed: {e}")
+            return False
     
     def test_connection(self) -> bool:
         """

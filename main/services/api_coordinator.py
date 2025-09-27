@@ -790,7 +790,7 @@ class APICoordinator:
         """
         try:
             # Import economic data service
-            from src.core.fred_api_service import FredApiService
+            from .fred_api_service import FREDAPIService as FredApiService
             
             fred_service = FredApiService()
             
@@ -821,7 +821,7 @@ class APICoordinator:
         """
         try:
             # Import global market service
-            from src.core.global_market_service import GlobalMarketService
+            from .global_market_service import GlobalMarketService
             
             market_service = GlobalMarketService()
             
@@ -852,7 +852,7 @@ class APICoordinator:
         """
         try:
             # Import currency service
-            from src.core.currency_service import CurrencyService
+            from .currency_service import CurrencyService
             
             currency_service = CurrencyService()
             
@@ -882,7 +882,8 @@ class APICoordinator:
         """
         try:
             # Import geopolitical risk service
-            from src.core.geopolitical_risk_service import GeopoliticalRiskService
+            # GeopoliticalRiskService removed during cleanup
+            GeopoliticalRiskService = None
             
             geopolitical_service = GeopoliticalRiskService()
             
@@ -991,7 +992,7 @@ class APICoordinator:
     def _test_fred_api(self) -> bool:
         """Test FRED API connection"""
         try:
-            from src.core.fred_api_service import FredApiService
+            from .fred_api_service import FREDAPIService as FredApiService
             fred_service = FredApiService()
             return fred_service.test_connection()
         except Exception as e:
@@ -1001,7 +1002,7 @@ class APICoordinator:
     def _test_market_data_api(self) -> bool:
         """Test market data API connection"""
         try:
-            from src.core.global_market_service import GlobalMarketService
+            from .global_market_service import GlobalMarketService
             market_service = GlobalMarketService()
             return market_service.test_connection()
         except Exception as e:
@@ -1011,7 +1012,7 @@ class APICoordinator:
     def _test_currency_api(self) -> bool:
         """Test currency API connection"""
         try:
-            from src.core.currency_service import CurrencyService
+            from .currency_service import CurrencyService
             currency_service = CurrencyService()
             return currency_service.test_connection()
         except Exception as e:
@@ -1547,7 +1548,8 @@ class APICoordinator:
     def _test_geopolitical_api(self) -> bool:
         """Test geopolitical API connection"""
         try:
-            from src.core.geopolitical_risk_service import GeopoliticalRiskService
+            # GeopoliticalRiskService removed during cleanup
+            GeopoliticalRiskService = None
             geopolitical_service = GeopoliticalRiskService()
             return geopolitical_service.test_connection()
         except Exception as e:
