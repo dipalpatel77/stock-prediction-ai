@@ -1,0 +1,34 @@
+# AI Stock Predictor - Minimal Requirements
+# Lightweight installation for basic functionality only
+
+# Core ML and Data Science (Essential)
+scikit-learn>=1.3.0
+pandas>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+
+# Financial Data (Essential)
+yfinance>=0.2.18
+ta>=0.10.2
+
+# Database (Essential)
+mysql-connector-python>=8.1.0
+sqlalchemy>=2.0.0
+
+# API Integration (Essential)
+requests>=2.31.0
+pyotp>=2.8.0
+
+# Utilities (Essential)
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+joblib>=1.3.0
+
+# Optional: Uncomment for advanced features
+# xgboost>=1.7.0          # For XGBoost models
+# lightgbm>=4.0.0         # For LightGBM models  
+# catboost>=1.2.0         # For CatBoost models
+# tensorflow>=2.10.0      # For neural networks
+# plotly>=5.15.0          # For interactive plots
+# seaborn>=0.12.0         # For statistical plots
+# rich>=13.4.0            # For rich console output

@@ -1,0 +1,55 @@
+# AI Stock Predictor - Production Requirements
+# Optimized for production deployment with security and performance focus
+
+# Core ML and Data Science
+scikit-learn>=1.3.0,<2.0.0
+pandas>=2.0.0,<3.0.0
+numpy>=1.24.0,<2.0.0
+matplotlib>=3.7.0,<4.0.0
+
+# Advanced ML (Production-tested versions)
+xgboost>=1.7.0,<2.0.0
+lightgbm>=4.0.0,<5.0.0
+catboost>=1.2.0,<2.0.0
+
+# Financial Data
+yfinance>=0.2.18,<1.0.0
+ta>=0.10.2,<1.0.0
+
+# Database (Production)
+mysql-connector-python>=8.1.0,<9.0.0
+sqlalchemy>=2.0.0,<3.0.0
+pymysql>=1.0.2,<2.0.0
+
+# API and Security
+requests>=2.31.0,<3.0.0
+pyotp>=2.8.0,<3.0.0
+cryptography>=41.0.0,<42.0.0
+urllib3>=2.0.0,<3.0.0
+
+# Performance and Caching
+joblib>=1.3.0,<2.0.0
+cachetools>=5.3.0,<6.0.0
+numba>=0.57.0,<1.0.0
+
+# Configuration
+python-dotenv>=1.0.0,<2.0.0
+pydantic>=2.0.0,<3.0.0
+
+# Monitoring and Logging
+loguru>=0.7.0,<1.0.0
+structlog>=23.1.0,<24.0.0
+
+# Utilities
+tqdm>=4.65.0,<5.0.0
+rich>=13.4.0,<14.0.0
+
+# Async Support
+aiohttp>=3.8.0,<4.0.0
+
+# Data Export
+openpyxl>=3.1.0,<4.0.0
+xlsxwriter>=3.1.0,<4.0.0
+
+# Security Scanning (Production)
+safety>=2.3.0,<3.0.0

@@ -1,10 +1,10 @@
-# Environment variables and sensitive data
-.env
-.env.local
-.env.*.local
-*.env
+# =============================================================================
+# AI Stock Predictor - Comprehensive .gitignore
+# =============================================================================
 
+# =============================================================================
 # Python
+# =============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -22,183 +22,61 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# poetry
-poetry.lock
-
-# pdm
-.pdm.toml
-
-# PEP 582
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.venv
-env/
+# =============================================================================
+# Virtual Environments
+# =============================================================================
 venv/
+venv_new/
+env/
 ENV/
 env.bak/
 venv.bak/
+.venv/
+.env/
+pyvenv.cfg
+pip-selfcheck.json
 
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
+# =============================================================================
+# IDE and Editors
+# =============================================================================
+# VSCode
+.vscode/
+*.code-workspace
 
 # PyCharm
 .idea/
+*.iml
+*.ipr
+*.iws
 
-# VS Code
-.vscode/
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
 
-# ========================================
-# AI STOCK PREDICTOR PROJECT SPECIFIC
-# ========================================
-
-# Model files (can be large and are generated)
-models/*.pkl
-models/*.h5
-models/*.joblib
-models/*.model
-models/*.pkl.gz
-models/*.h5.gz
-models/*.joblib.gz
-models/*.model.gz
-
-# Data files (can be large and contain sensitive info)
-data/*.csv
-data/*.json
-data/*.parquet
-data/*.h5
-data/*.pkl
-data/*.xlsx
-data/*.xls
-
-# Organized data structure - ignore generated data
-data/by_ticker/*/
-data/cache/
-data/economic_cache/
-data/angel_data/
-data/phase1/
-data/phase2/
-data/phase3/
-data/fundamental/
-data/institutional/
-data/global/
-data/comparison_reports/
-
-# Archive directory (contains old data)
-archive/
-
-# Logs and debugging
-logs/
-*.log
-debug_output.txt
-error_log.txt
-analysis_log.txt
-
-# CatBoost specific
-catboost_info/
-
-# Temporary files
-*.tmp
-*.temp
+# Vim
 *.swp
 *.swo
 *~
 
-# OS generated files
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# =============================================================================
+# Operating System
+# =============================================================================
+# macOS
 .DS_Store
 .DS_Store?
 ._*
@@ -207,110 +85,354 @@ catboost_info/
 ehthumbs.db
 Thumbs.db
 
-# Backup files
-*.bak
-*.backup
-*.old
-backup_before_cleanup/
-
-# Configuration files with sensitive data
-config_local.py
-secrets.py
-credentials.py
-*_local.py
-*_secrets.py
-
-# API keys and tokens (additional safety)
-*api_key*
-*auth_token*
-*secret*
-*password*
-*credential*
-*_key*
-*_token*
-
-# Large data files
-*.zip
-*.tar.gz
-*.rar
-*.7z
-
-# Jupyter notebook outputs (keep source, ignore outputs)
-*.ipynb
-
-# Training artifacts
-checkpoints/
-runs/
-wandb/
-mlruns/
-tensorboard_logs/
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# Cache directories
-.cache/
-cache/
-__pycache__/
-*.pyc
-*.pyo
-
-# Reports and outputs (generated files)
-reports/
-comprehensive_reports/
-output/
-results/
-
-# Cleanup and organization artifacts
-cleanup_report.md
-CLEANUP_REPORT.md
-reorganize_files.py
-update_imports.py
-cleanup_project.py
-test_imports.py
-
-# Angel One API specific
-angel_data/
-angel_cache/
-angel_exports/
-
-# Economic data cache
-economic_cache/
-fred_cache/
-world_bank_cache/
-
-# Model training artifacts
-training_logs/
-model_artifacts/
-experiment_logs/
-
-# Validation and testing outputs
-validation_results/
-test_results/
-performance_logs/
-
-# IDE and editor specific
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Windows specific
+# Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
 
-# macOS specific
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Linux specific
+# Linux
 *~
 .fuse_hidden*
 .directory
 .Trash-*
 .nfs*
+
+# =============================================================================
+# AI/ML Specific Files
+# =============================================================================
+# Model files
+*.pkl
+*.pickle
+*.joblib
+*.h5
+*.hdf5
+*.pb
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+
+# Model directories
+models/
+trained_models/
+model_artifacts/
+checkpoints/
+saved_models/
+
+# Training data
+training_data/
+validation_data/
+test_data/
+datasets/
+data/
+
+# =============================================================================
+# Financial Data and Stock Information
+# =============================================================================
+# Stock data files
+stock_data/
+financial_data/
+market_data/
+historical_data/
+angel_data/
+yahoo_data/
+quandl_data/
+
+# Data file formats
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.feather
+*.arrow
+*.orc
+*.avro
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db3
+database/
+db/
+
+# =============================================================================
+# Cache and Temporary Files
+# =============================================================================
+# Cache directories
+cache/
+.cache/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+*.log
+*.out
+*.err
+
+# Downloads
+downloads/
+download/
+
+# =============================================================================
+# API Keys and Credentials
+# =============================================================================
+# Configuration files with secrets
+config.ini
+config.json
+secrets.json
+credentials.json
+api_keys.json
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Certificate files
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# =============================================================================
+# Logs and Reports
+# =============================================================================
+# Log files
+logs/
+*.log
+*.log.*
+
+# Reports and outputs
+reports/
+output/
+results/
+predictions/
+analysis/
+backups/
+
+# =============================================================================
+# Jupyter Notebooks
+# =============================================================================
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+*.ipynb
+
+# =============================================================================
+# Testing and Coverage
+# =============================================================================
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Coverage reports
+coverage.xml
+*.cover
+.hypothesis/
+
+# =============================================================================
+# Documentation
+# =============================================================================
+# Sphinx documentation
+docs/_build/
+docs/build/
+
+# =============================================================================
+# Large Files and Archives
+# =============================================================================
+# Archive files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.rar
+*.7z
+*.gz
+*.bz2
+
+# =============================================================================
+# Media Files
+# =============================================================================
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.ico
+*.webp
+
+# Videos
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+
+# Audio
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+
+# =============================================================================
+# Development Tools
+# =============================================================================
+# Pre-commit
+.pre-commit-config.yaml
+
+# Black
+.black
+
+# isort
+.isort.cfg
+
+# Flake8
+.flake8
+
+# MyPy
+.mypy.ini
+mypy.ini
+
+# Bandit
+.bandit
+
+# =============================================================================
+# Package Management
+# =============================================================================
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Poetry
+poetry.lock
+
+# Pipenv
+Pipfile.lock
+
+# Conda
+.conda/
+
+# =============================================================================
+# Cloud and Deployment
+# =============================================================================
+# Docker
+.dockerignore
+Dockerfile.dev
+docker-compose.override.yml
+
+# Kubernetes
+*.kubeconfig
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+# Backup files
+backup_external_files/
+backups/
+*.backup
+*.bak
+
+# Analysis outputs
+analysis_results/
+prediction_results/
+trading_signals/
+
+# Configuration backups
+*.config.backup
+*.conf.backup
+
+# =============================================================================
+# IDE Specific
+# =============================================================================
+# VSCode settings (keep some, ignore others)
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+
+# JetBrains
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries/
+.idea/shelf/
+
+# =============================================================================
+# OS Generated Files
+# =============================================================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# Security and Sensitive Data
+# =============================================================================
+# Never commit these
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+keys/
+tokens/
+
+# =============================================================================
+# Performance and Monitoring
+# =============================================================================
+# Profiling data
+*.prof
+*.profile
+*.cprofile
+
+# Memory dumps
+*.dmp
+*.hprof
+
+# =============================================================================
+# End of .gitignore
+# =============================================================================
