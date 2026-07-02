@@ -1,6 +1,6 @@
 """
-Pipeline Logger
-Enhanced logging for the polylithic pipeline
+Pipeline Logger — PRIMARY logger for pipeline components.
+For standalone scripts use simple_logger.py (SimpleLogger).
 """
 
 import logging

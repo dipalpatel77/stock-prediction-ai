@@ -1,6 +1,14 @@
 """
-Incremental Update Service
-Handles intelligent incremental data updates and synchronization
+Incremental Update Service (Strategy Coordinator)
+===================================================
+Decides WHEN and HOW to perform data updates: full refresh, incremental
+append, smart merge, or scheduled. This is the strategy/decision layer.
+
+Does NOT fetch raw data directly — delegates to incremental_data_service.py.
+Does NOT retrain models — see incremental_service.py.
+
+Primary class: IncrementalUpdateService
+Used directly by: data_processor.py
 """
 
 import logging

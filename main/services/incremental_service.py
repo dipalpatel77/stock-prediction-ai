@@ -1,6 +1,14 @@
 """
-Incremental Service
-Handles incremental learning and model updates
+Incremental Service (ML Model Updates)
+=======================================
+Manages incremental ML model retraining cycles — updating existing models
+with new data rather than full retraining from scratch.
+
+Does NOT fetch raw market data — see incremental_data_service.py.
+Does NOT decide when to refresh — see incremental_update_service.py.
+
+Primary class: IncrementalService
+Used by: service_manager.py
 """
 
 import logging

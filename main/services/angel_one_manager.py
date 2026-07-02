@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 # from src.core.enhanced_angel_one_service import EnhancedAngelOneService
 # from src.core.angel_one_database_schema import AngelOneDatabaseSchema
 from main.utils.rate_limiter import get_api_rate_limiter
+from main.utils.date_formatter import convert_period_to_days
+from main.utils.stock_utils import is_cache_fresh
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +33,15 @@ class AngelOneManager:
         self.db_schema = None  # Will be implemented with actual database schema
         
         # Set up actual Angel One credentials
-        self.api_key = config.get('api_key', '1TKgQThc ')
+        self.api_key = config.get('api_key', 'fRBSMrnn')
         self.client_code = config.get('api_secret', 'D54448')  # api_secret is actually client_code
         self.client_pin = config.get('access_token', '2251')  # access_token is actually client_pin
         self.totp_secret = config.get('totp_secret', 'NP4SAXOKMTJQZ4KZP2TBTYXRCE')
         
         self.rate_limiter = get_api_rate_limiter()
+
+        from .technical_indicators_service import TechnicalIndicatorsService
+        self.technical_indicators_service = TechnicalIndicatorsService()
         
         # Angel One API limits - Based on official documentation
         self.api_limits = {
@@ -253,7 +258,7 @@ class AngelOneManager:
                     print(f"⏰ Downloading {interval} data (max {max_days} days)...")
                     
                     # Convert period to days and limit to max days for this interval
-                    requested_days = self._convert_period_to_days(period)
+                    requested_days = convert_period_to_days(period)
                     actual_days = min(requested_days, max_days)
                     
                     # Get historical data for this interval
@@ -423,36 +428,8 @@ class AngelOneManager:
             return pd.DataFrame()
     
     def _add_technical_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
-        """Add technical indicators to the data"""
         try:
-            import pandas as pd
-            import numpy as np
-            
-            # Moving Averages
-            data['MA_5'] = data['Close'].rolling(window=5).mean()
-            data['MA_10'] = data['Close'].rolling(window=10).mean()
-            data['MA_20'] = data['Close'].rolling(window=20).mean()
-            data['MA_50'] = data['Close'].rolling(window=50).mean()
-            
-            # RSI
-            delta = data['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / loss
-            data['RSI'] = 100 - (100 / (1 + rs))
-            
-            # Bollinger Bands
-            data['BB_Middle'] = data['Close'].rolling(window=20).mean()
-            bb_std = data['Close'].rolling(window=20).std()
-            data['BB_Upper'] = data['BB_Middle'] + (bb_std * 2)
-            data['BB_Lower'] = data['BB_Middle'] - (bb_std * 2)
-            
-            # Volume indicators
-            data['Volume_MA'] = data['Volume'].rolling(window=20).mean()
-            data['Volume_Ratio'] = data['Volume'] / data['Volume_MA']
-            
-            return data
-            
+            return self.technical_indicators_service.calculate_all_indicators(data)
         except Exception as e:
             logger.error(f"Technical indicators calculation failed: {e}")
             return data
@@ -572,7 +549,7 @@ class AngelOneManager:
         """
         try:
             # Convert period to days
-            days = self._convert_period_to_days(period)
+            days = convert_period_to_days(period)
             
             # Check if requested days exceed API limits
             max_days = self.api_limits.get(interval, 2000)
@@ -640,7 +617,7 @@ class AngelOneManager:
             data = self.db_schema.get_stock_data(
                 ticker=ticker,
                 interval=interval,
-                days=self._convert_period_to_days(period)
+                days=convert_period_to_days(period)
             )
             
             if data is not None and not data.empty:
@@ -685,19 +662,7 @@ class AngelOneManager:
             return None
     
     def _is_cache_fresh(self, data: pd.DataFrame, max_age_hours: int = 24) -> bool:
-        """Check if cached data is fresh enough"""
-        try:
-            if data.empty:
-                return False
-                
-            last_update = data.index.max()
-            age_hours = (datetime.now() - last_update).total_seconds() / 3600
-            
-            return age_hours < max_age_hours
-            
-        except Exception as e:
-            logger.error(f"Cache freshness check failed: {e}")
-            return False
+        return is_cache_fresh(data, max_age_hours)
     
     def test_connection(self) -> bool:
         """
@@ -815,30 +780,7 @@ class AngelOneManager:
             return data
     
     def _convert_period_to_days(self, period: str) -> int:
-        """
-        Convert period string to days for Angel One API
-        
-        Args:
-            period: Period string (e.g., '1y', '6mo', '3mo')
-            
-        Returns:
-            Number of days
-        """
-        period_mapping = {
-            '1d': 1,
-            '5d': 5,
-            '1mo': 30,
-            '3mo': 90,
-            '6mo': 180,
-            '1y': 365,
-            '2y': 730,
-            '5y': 1825,
-            '10y': 3650,
-            'ytd': 365,
-            'max': 2000  # Angel One max limit
-        }
-        
-        return period_mapping.get(period.lower(), 365)  # Default to 1 year
+        return convert_period_to_days(period)
     
     def get_available_intervals(self) -> list:
         """

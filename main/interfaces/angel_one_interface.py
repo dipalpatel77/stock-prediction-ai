@@ -78,10 +78,10 @@ class AngelOneInterface:
                 print("-" * 30)
                 
                 # Use actual Angel One credentials
-                api_key = "1TKgQThc "  # Actual API key
+                api_key = "fRBSMrnn"  # Actual API key
                 api_secret = "D54448"  # Client code
                 access_token = "2251"  # Client PIN
-                totp_secret = "NP4SAXOKMTJQZ4KZP2TBTYXRCE"  # TOTP secret
+                totp_secret = "fRBSMrnn"  # TOTP secret
                 
                 print(f"✅ Using actual Angel One credentials")
                 print(f"   API Key: {api_key[:8]}...")

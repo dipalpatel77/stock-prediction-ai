@@ -159,10 +159,13 @@ class StrategyAnalyzer(BasePipelineComponent):
         try:
             start_time = time.time()
             
-            # Get enhanced data from previous pipeline step
-            enhanced_data = kwargs.get('enhanced_data', pd.DataFrame())
-            
-            if enhanced_data.empty:
+            # Get enhanced data from previous pipeline step (accept any of the known keys)
+            enhanced_data = kwargs.get('enhanced_data')
+            if not isinstance(enhanced_data, pd.DataFrame) or enhanced_data.empty:
+                enhanced_data = kwargs.get('data')
+            if not isinstance(enhanced_data, pd.DataFrame) or enhanced_data.empty:
+                enhanced_data = kwargs.get('processed_data')
+            if not isinstance(enhanced_data, pd.DataFrame) or enhanced_data.empty:
                 logger.warning("No enhanced data provided, using placeholder data")
                 enhanced_data = self._create_placeholder_data()
             

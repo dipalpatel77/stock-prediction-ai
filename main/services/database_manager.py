@@ -4,6 +4,7 @@ Optimized Database Manager
 Manages database operations with advanced connection pooling, query optimization, and performance monitoring
 """
 
+import os
 import pandas as pd
 import logging
 import time
@@ -17,6 +18,7 @@ from datetime import datetime, timedelta
 from contextlib import contextmanager, asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
+from main.utils.date_formatter import convert_period_to_days
 import json
 
 # Import core services
@@ -41,7 +43,7 @@ class DatabaseManager:
             return
         if config is None:
             config = {
-                'database_url': 'sqlite:///default.db',
+                'database_url': f"sqlite:///{os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'default.db')}",
                 'max_connections': 20,
                 'min_connections': 5,
                 'connection_timeout': 30,
@@ -278,46 +280,68 @@ class DatabaseManager:
     def _store_angel_one_data(self, conn, ticker: str, data: pd.DataFrame, interval: str):
         """
         Store Angel One data using proper database storage
-        
+
         Args:
             conn: Database connection
             ticker: Stock ticker symbol
             data: Stock data DataFrame
             interval: Data interval
         """
+        cursor = None
         try:
             cursor = conn.cursor()
-            
-            # Create table if not exists
-            create_table_sql = """
-            CREATE TABLE IF NOT EXISTS angel_one_data (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                ticker VARCHAR(20) NOT NULL,
-                date DATE NOT NULL,
-                open_price DECIMAL(10,2),
-                high_price DECIMAL(10,2),
-                low_price DECIMAL(10,2),
-                close_price DECIMAL(10,2),
-                volume BIGINT,
-                interval_type VARCHAR(20),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_ticker_date_interval (ticker, date, interval_type)
-            )
-            """
+            is_sqlite = getattr(conn, 'connection_type', 'sqlite') == 'sqlite'
+            ph = '?' if is_sqlite else '%s'
+
+            if is_sqlite:
+                create_table_sql = """
+                CREATE TABLE IF NOT EXISTS angel_one_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticker TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    open_price REAL,
+                    high_price REAL,
+                    low_price REAL,
+                    close_price REAL,
+                    volume INTEGER,
+                    interval_type TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (ticker, date, interval_type)
+                )
+                """
+                insert_sql = (
+                    f"INSERT OR REPLACE INTO angel_one_data "
+                    f"(ticker, date, open_price, high_price, low_price, close_price, volume, interval_type) "
+                    f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                )
+            else:
+                create_table_sql = """
+                CREATE TABLE IF NOT EXISTS angel_one_data (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    ticker VARCHAR(20) NOT NULL,
+                    date DATE NOT NULL,
+                    open_price DECIMAL(10,2),
+                    high_price DECIMAL(10,2),
+                    low_price DECIMAL(10,2),
+                    close_price DECIMAL(10,2),
+                    volume BIGINT,
+                    interval_type VARCHAR(20),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_ticker_date_interval (ticker, date, interval_type)
+                )
+                """
+                insert_sql = (
+                    f"INSERT INTO angel_one_data "
+                    f"(ticker, date, open_price, high_price, low_price, close_price, volume, interval_type) "
+                    f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}) "
+                    f"ON DUPLICATE KEY UPDATE "
+                    f"open_price = VALUES(open_price), high_price = VALUES(high_price), "
+                    f"low_price = VALUES(low_price), close_price = VALUES(close_price), "
+                    f"volume = VALUES(volume)"
+                )
+
             cursor.execute(create_table_sql)
-            
-            # Insert data with ON DUPLICATE KEY UPDATE
-            insert_sql = """
-            INSERT INTO angel_one_data (ticker, date, open_price, high_price, low_price, close_price, volume, interval_type)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-            open_price = VALUES(open_price),
-            high_price = VALUES(high_price),
-            low_price = VALUES(low_price),
-            close_price = VALUES(close_price),
-            volume = VALUES(volume)
-            """
-            
+
             for date, row in data.iterrows():
                 cursor.execute(insert_sql, (
                     ticker,
@@ -329,14 +353,22 @@ class DatabaseManager:
                     row['Volume'],
                     interval
                 ))
-            
+
             conn.commit()
             logger.info(f"Successfully stored {len(data)} Angel One records for {ticker}")
-            
+
         except Exception as e:
             logger.error(f"Failed to store Angel One data: {e}")
-            conn.rollback()
-            # Don't raise - continue processing
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
     
     def _store_yahoo_data(self, conn, ticker: str, data: pd.DataFrame, interval: str):
         """
@@ -376,26 +408,25 @@ class DatabaseManager:
         Returns:
             DataFrame with Angel One data or None if not found
         """
+        cursor = None
         try:
             cursor = conn.cursor()
-            
-            # Calculate date range
-            days = self._convert_period_to_days(period)
+            ph = '?' if getattr(conn, 'connection_type', 'sqlite') == 'sqlite' else '%s'
+
+            days = convert_period_to_days(period)
             start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-            
-            # Query data
-            query_sql = """
-            SELECT date, open_price, high_price, low_price, close_price, volume
-            FROM angel_one_data
-            WHERE ticker = %s AND interval_type = %s AND date >= %s
-            ORDER BY date ASC
-            """
-            
+
+            query_sql = (
+                f"SELECT date, open_price, high_price, low_price, close_price, volume "
+                f"FROM angel_one_data "
+                f"WHERE ticker = {ph} AND interval_type = {ph} AND date >= {ph} "
+                f"ORDER BY date ASC"
+            )
+
             cursor.execute(query_sql, (ticker, interval, start_date))
             results = cursor.fetchall()
-            
+
             if results:
-                # Convert to DataFrame
                 df_data = []
                 for row in results:
                     df_data.append({
@@ -406,19 +437,25 @@ class DatabaseManager:
                         'Close': float(row[4]),
                         'Volume': int(row[5])
                     })
-                
+
                 df = pd.DataFrame(df_data)
                 df.set_index('Date', inplace=True)
                 df.sort_index(inplace=True)
-                
+
                 logger.info(f"Retrieved {len(df)} Angel One records for {ticker}")
                 return df
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Failed to get Angel One data: {e}")
             return None
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
     
     def _get_yahoo_data(self, conn, ticker: str, period: str, interval: str) -> Optional[pd.DataFrame]:
         """
@@ -449,30 +486,7 @@ class DatabaseManager:
             return None
     
     def _convert_period_to_days(self, period: str) -> int:
-        """
-        Convert period string to days
-        
-        Args:
-            period: Period string (e.g., '1y', '6mo', '3mo')
-            
-        Returns:
-            Number of days
-        """
-        period_mapping = {
-            '1d': 1,
-            '5d': 5,
-            '1mo': 30,
-            '3mo': 90,
-            '6mo': 180,
-            '1y': 365,
-            '2y': 730,
-            '5y': 1825,
-            '10y': 3650,
-            'ytd': 365,
-            'max': 2000
-        }
-        
-        return period_mapping.get(period.lower(), 365)  # Default to 1 year
+        return convert_period_to_days(period)
     
     def get_database_statistics(self) -> Dict[str, Any]:
         """
@@ -876,7 +890,7 @@ class DatabaseManager:
         """Async get Angel One data from database"""
         try:
             # Convert period to days
-            days = self._convert_period_to_days(period)
+            days = convert_period_to_days(period)
             
             query = """
                 SELECT date, open, high, low, close, volume, symbol_token, interval_type, data_source
@@ -906,7 +920,7 @@ class DatabaseManager:
         """Async get Yahoo Finance data from database"""
         try:
             # Convert period to days
-            days = self._convert_period_to_days(period)
+            days = convert_period_to_days(period)
             
             query = """
                 SELECT date, open, high, low, close, volume, adj_close

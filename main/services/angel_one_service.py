@@ -35,7 +35,7 @@ class AngelOneService:
         """
         self.config = config
         self.base_url = "https://apiconnect.angelone.in"
-        self.api_key = config.get('api_key', '1TKgQThc')
+        self.api_key = config.get('api_key', 'fRBSMrnn')
         self.client_code = config.get('api_secret', 'D54448')
         self.client_pin = config.get('access_token', '2251')
         self.totp_secret = config.get('totp_secret', 'NP4SAXOKMTJQZ4KZP2TBTYXRCE')
@@ -633,7 +633,7 @@ class AngelOneService:
             True if configured, False otherwise
         """
         return all([
-            self.api_key and self.api_key != '1TKgQThc',
+            self.api_key and self.api_key != 'your_api_key_here',
             self.client_code and self.client_code != 'D54448',
             self.client_pin and self.client_pin != '2251'
         ])

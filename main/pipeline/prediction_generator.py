@@ -752,37 +752,6 @@ class PredictionGenerator(BasePipelineComponent):
             self.logger.error(f"Risk assessment generation failed: {e}")
             return {'overall_risk_level': 'Medium'}
     
-    def _prepare_prediction_features(self, data: pd.DataFrame, days: int) -> Optional[pd.DataFrame]:
-        """Prepare features for prediction"""
-        try:
-            if len(data) < days:
-                self.logger.warning(f"Insufficient data for {days} day prediction")
-                return None
-            
-            # Select numeric columns and handle missing values
-            numeric_data = data.select_dtypes(include=[np.number])
-            numeric_data = numeric_data.dropna()
-            
-            if numeric_data.empty:
-                return None
-            
-            # Use the same feature selection logic as model trainer
-            # Remove 'Close' column if it exists (it's the target, not a feature)
-            if 'Close' in numeric_data.columns:
-                features = numeric_data.drop('Close', axis=1)
-            else:
-                # Use all columns except the last one (assuming last is target)
-                features = numeric_data.iloc[:, :-1]
-            
-            # Use the last row as features
-            features = features.iloc[-1:].copy()
-            
-            return features
-            
-        except Exception as e:
-            self.logger.error(f"Feature preparation failed: {e}")
-            return None
-    
     def _generate_statistical_prediction(self, data: pd.DataFrame, days: int, current_price: float) -> float:
         """Generate statistical prediction when ML models fail"""
         try:
@@ -971,58 +940,6 @@ class PredictionGenerator(BasePipelineComponent):
         except Exception as e:
             self.logger.error(f"Enhanced statistical prediction generation failed: {e}")
             return {'success': False, 'error': str(e)}
-    
-    def _generate_horizon_predictions(self, data: pd.DataFrame, models: Dict[str, Any], 
-                                    days: int, horizon_name: str) -> Dict[str, Any]:
-        """
-        Generate predictions for a specific horizon
-        
-        Args:
-            data: Historical data
-            models: Trained models
-            days: Number of days to predict
-            horizon_name: Name of the horizon
-            
-        Returns:
-            Dictionary with horizon predictions
-        """
-        try:
-            horizon_predictions = {}
-            
-            for model_name, model_info in models.items():
-                try:
-                    # Extract the actual model object from the dictionary
-                    if isinstance(model_info, dict) and 'model' in model_info:
-                        model = model_info['model']
-                    else:
-                        model = model_info
-                    
-                    # Prepare features for prediction
-                    X = self._prepare_prediction_features(data, days)
-                    
-                    if X is None or X.empty:
-                        continue
-                    
-                    # Generate predictions
-                    predictions = self._generate_model_predictions(model, X, days)
-                    
-                    if predictions is not None:
-                        horizon_predictions[model_name] = {
-                            'predictions': predictions,
-                            'horizon_days': days,
-                            'model_name': model_name,
-                            'prediction_dates': self._generate_prediction_dates(days)
-                        }
-                        
-                except Exception as e:
-                    self.logger.error(f"Model prediction generation failed: {e}")
-                    continue
-            
-            return horizon_predictions
-            
-        except Exception as e:
-            self.logger.error(f"Horizon prediction generation failed: {e}")
-            return {}
     
     def _generate_model_predictions(self, model: Any, X: pd.DataFrame, days: int) -> Optional[np.ndarray]:
         """

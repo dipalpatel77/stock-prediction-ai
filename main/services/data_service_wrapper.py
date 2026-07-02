@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 from .data_service import DataService
 from .database_manager import DatabaseManager
 from .angel_one_manager import AngelOneManager
+from ..utils.date_formatter import convert_period_to_days
+from ..utils.stock_utils import is_indian_stock
 # Smart data fetcher removed (duplicate functionality)
 
 logger = logging.getLogger(__name__)
@@ -91,31 +93,38 @@ class DataServiceWrapper:
             
             data = None
             success = False
-            
-            # System now only supports Indian stocks
-            if not self._is_indian_stock(self.ticker):
-                raise Exception(f"Only Indian stocks are supported. {self.ticker} is not an Indian stock. Please use stocks like RELIANCE, TCS, INFY, etc.")
-            
-            # For Indian stocks, use ONLY Angel One API
-            if not self.angel_service:
-                raise Exception(f"Angel One service not available for Indian stock {self.ticker}. Please configure Angel One API.")
-            
-            data = self._load_angel_one_data(period, interval)
-            if data is not None and not data.empty:
-                logger.info(f"Successfully loaded {len(data)} records from Angel One for Indian stock {self.ticker}")
-                success = True
+
+            is_indian = self._is_indian_stock(self.ticker)
+
+            if is_indian:
+                # For Indian stocks, use Angel One API
+                if not self.angel_service:
+                    raise Exception(f"Angel One service not available for Indian stock {self.ticker}. Please configure Angel One API.")
+
+                data = self._load_angel_one_data(period, interval)
+                if data is not None and not data.empty:
+                    logger.info(f"Successfully loaded {len(data)} records from Angel One for Indian stock {self.ticker}")
+                    success = True
+                else:
+                    raise Exception(f"Failed to load data from Angel One for Indian stock {self.ticker}.")
             else:
-                raise Exception(f"Failed to load data from Angel One for Indian stock {self.ticker}. Angel One API is required for Indian stocks.")
-            
-            # Record the fetch attempt
-            self.smart_fetcher.record_fetch(self.ticker, interval, success)
-            
+                # For non-Indian stocks, use Yahoo Finance
+                data = self._load_yahoo_finance_data(period)
+                if data is not None and not data.empty:
+                    logger.info(f"Successfully loaded {len(data)} records from Yahoo Finance for {self.ticker}")
+                    success = True
+                else:
+                    raise Exception(f"Failed to load Yahoo Finance data for {self.ticker}.")
+
+            if self.smart_fetcher:
+                self.smart_fetcher.record_fetch(self.ticker, interval, success)
+
             return data
-            
+
         except Exception as e:
             logger.error(f"Failed to load data for {self.ticker}: {e}")
-            # Record failed fetch
-            self.smart_fetcher.record_fetch(self.ticker, interval, False)
+            if self.smart_fetcher:
+                self.smart_fetcher.record_fetch(self.ticker, interval, False)
             # Final fallback to basic data service
             return self._load_basic_data(period)
     
@@ -157,7 +166,7 @@ class DataServiceWrapper:
                         print(f"⏰ Downloading {interval} data (max {max_days} days)...")
                         
                         # Convert period to days and limit to max days for this interval
-                        requested_days = self._convert_period_to_days(period)
+                        requested_days = convert_period_to_days(period)
                         actual_days = min(requested_days, max_days)
                         
                         # Load data for this interval
@@ -284,7 +293,7 @@ class DataServiceWrapper:
                 return None
             
             # Convert period to days for Angel One API
-            days = self._convert_period_to_days(period)
+            days = convert_period_to_days(period)
             
             # Get data from Angel One service
             data = self.angel_service.get_historical_data(
@@ -472,69 +481,10 @@ class DataServiceWrapper:
             return data
     
     def _convert_period_to_days(self, period: str) -> int:
-        """
-        Convert period string to days for Angel One API
-        
-        Args:
-            period: Period string (e.g., '1y', '6mo', '3mo')
-            
-        Returns:
-            Number of days
-        """
-        period_mapping = {
-            '1d': 1,
-            '5d': 5,
-            '1mo': 30,
-            '3mo': 90,
-            '6mo': 180,
-            '1y': 365,
-            '2y': 730,
-            '5y': 1825,
-            '10y': 3650,
-            'ytd': 365,
-            'max': 2000  # Angel One max limit
-        }
-        
-        return period_mapping.get(period.lower(), 365)  # Default to 1 year
+        return convert_period_to_days(period)
     
     def _is_indian_stock(self, ticker: str) -> bool:
-        """
-        Check if ticker is an Indian stock
-        
-        Args:
-            ticker: Stock ticker symbol
-            
-        Returns:
-            True if Indian stock, False otherwise
-        """
-        # Comprehensive check for Indian stocks
-        ticker_upper = ticker.upper()
-        
-        # Check for NSE/BSE suffixes
-        indian_suffixes = ['.NS', '.NSE', '.BO', '.BSE']
-        if any(ticker_upper.endswith(suffix) for suffix in indian_suffixes):
-            return True
-        
-        # Check for common Indian stock patterns (without suffixes)
-        # This is a basic list - can be expanded
-        indian_stocks = [
-            'RELIANCE', 'TCS', 'HDFC', 'INFY', 'HDFCBANK', 'ICICIBANK', 'KOTAKBANK',
-            'BHARTIARTL', 'ITC', 'LT', 'SBIN', 'ASIANPAINT', 'MARUTI', 'NESTLEIND',
-            'POWERGRID', 'NTPC', 'ONGC', 'COALINDIA', 'TITAN', 'ULTRACEMCO', 'WIPRO',
-            'AXISBANK', 'BAJFINANCE', 'BAJAJFINSV', 'DRREDDY', 'EICHERMOT', 'GRASIM',
-            'HCLTECH', 'HEROMOTOCO', 'HINDALCO', 'INDUSINDBK', 'JSWSTEEL', 'M&M',
-            'NIFTY', 'BANKNIFTY', 'SENSEX'
-        ]
-        
-        if ticker_upper in indian_stocks:
-            return True
-        
-        # Check if ticker is in Indian stock list from config
-        if hasattr(self, 'config') and 'indian_stocks' in self.config:
-            if ticker_upper in [s.upper() for s in self.config['indian_stocks']]:
-                return True
-        
-        return False
+        return is_indian_stock(ticker)
     
     def is_angel_one_configured(self) -> bool:
         """

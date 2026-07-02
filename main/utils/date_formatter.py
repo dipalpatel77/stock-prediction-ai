@@ -13,6 +13,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def convert_period_to_days(period: str) -> int:
+    """Convert a yfinance-style period string to number of days."""
+    mapping = {
+        '1d': 1, '5d': 5, '1mo': 30, '3mo': 90, '6mo': 180,
+        '1y': 365, '2y': 730, '5y': 1825, '10y': 3650,
+        'ytd': 365, 'max': 2000,
+    }
+    return mapping.get(period.lower(), 365)
+
+
 class DateFormatter:
     """
     Enhanced date formatter for predictions and analysis

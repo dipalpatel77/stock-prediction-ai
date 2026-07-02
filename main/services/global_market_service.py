@@ -678,14 +678,17 @@ class GlobalMarketService:
     def get_global_market_data(self) -> Dict[str, Any]:
         """Get global market data - compatibility method"""
         try:
-            # Get market data for major indices
-            market_data = self.get_market_data()
+            # Get market data for all monitored indices
+            market_data = {}
+            for index_name in self.monitored_indices:
+                try:
+                    index_data = self.get_market_data(index_name)
+                    market_data[index_name] = [md.__dict__ for md in index_data] if index_data else []
+                except Exception:
+                    market_data[index_name] = []
             
-            # Get sector performance
-            sector_data = self.get_sector_performance()
-            
-            # Get regional performance
-            regional_data = self.get_regional_performance()
+            sector_data = {}
+            regional_data = {}
             
             return {
                 'market_data': market_data,

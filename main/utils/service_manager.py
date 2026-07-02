@@ -13,6 +13,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import services
+from .stock_utils import is_indian_stock
 from ..services.data_service_wrapper import DataServiceWrapper
 from ..services.angel_one_manager import AngelOneManager
 from ..services.database_manager import DatabaseManager
@@ -501,21 +502,7 @@ class ServiceManager:
             return False
     
     def _is_indian_stock(self, ticker: str) -> bool:
-        """
-        Check if ticker is an Indian stock
-        
-        Args:
-            ticker: Stock ticker symbol
-            
-        Returns:
-            True if Indian stock, False otherwise
-        """
-        try:
-            indian_indicators = ['.NS', '.BO', '.NSE', '.BSE']
-            return any(ticker.endswith(indicator) for indicator in indian_indicators)
-        except Exception as e:
-            logger.error(f"Failed to check if Indian stock: {e}")
-            return False
+        return is_indian_stock(ticker)
     
     # Placeholder service creation methods
     def _create_strategy_service_placeholder(self):

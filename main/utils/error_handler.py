@@ -1,6 +1,6 @@
 """
-Error Handler
-Enhanced error handling for the polylithic pipeline
+Error Handler — PRIMARY error handler for pipeline components.
+For standalone scripts use simple_error_handler.py (SimpleErrorHandler).
 """
 
 import logging

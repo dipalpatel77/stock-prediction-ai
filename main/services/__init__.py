@@ -14,10 +14,14 @@ from .feature_engineering_service import FeatureEngineeringService
 from .currency_service import CurrencyService
 from .fred_api_service import FREDAPIService
 from .global_market_service import GlobalMarketService
+# --- Incremental update system (three cooperating services) ---
+# IncrementalDataService:      syncs raw OHLCV price/volume data from APIs
+# IncrementalService:          manages ML model retraining cycles
+# IncrementalUpdateService:    strategy coordinator — decides full vs incremental
 from .incremental_data_service import IncrementalDataService
 from .incremental_service import IncrementalService
+from .incremental_update_service import IncrementalUpdateService
 from .model_service import ModelService
-from .multi_exchange_data_service import MultiExchangeDataService
 from .report_generator import ReportGenerator
 from .interval_manager import IntervalManager
 
@@ -34,8 +38,8 @@ __all__ = [
     'GlobalMarketService',
     'IncrementalDataService',
     'IncrementalService',
+    'IncrementalUpdateService',
     'ModelService',
-    'MultiExchangeDataService',
     'ReportGenerator',
     'IntervalManager'
 ]

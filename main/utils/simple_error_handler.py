@@ -1,6 +1,6 @@
 """
-Simple Error Handler
-Simplified error handling for the stock prediction pipeline
+Simple Error Handler — Lightweight variant for standalone scripts.
+For pipeline components use error_handler.py (ErrorHandler).
 """
 
 import logging

@@ -1,6 +1,14 @@
 """
 Incremental Data Service
-Handles incremental data updates and synchronization
+========================
+Syncs raw market data (price/volume OHLCV) from external APIs (Yahoo Finance,
+Angel One, Alpha Vantage). Handles gap detection and partial data refresh.
+
+Does NOT handle model retraining — see incremental_service.py.
+Does NOT decide when to refresh — see incremental_update_service.py.
+
+Primary class: IncrementalDataService
+Used by: service_manager.py
 """
 
 import logging

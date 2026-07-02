@@ -19,7 +19,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('pipeline.log', encoding='utf-8'),
+        logging.FileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs', 'pipeline.log'), encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -376,7 +376,7 @@ def run_quick_analysis(ticker: str, period: str = "1y", use_enhanced: bool = Tru
                 exchange = 'NSE'
             
             config['angel_config'] = {
-                'api_key': '1TKgQThc ',
+                'api_key': 'fRBSMrnn',
                 'api_secret': 'D54448',
                 'access_token': '2251',
                 'totp_secret': 'NP4SAXOKMTJQZ4KZP2TBTYXRCE',

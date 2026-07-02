@@ -1,9 +1,10 @@
 """
-Simple Logger
-Simplified logging for the stock prediction pipeline
+Simple Logger — Lightweight variant for standalone scripts.
+For pipeline components use pipeline_logger.py (PipelineLogger).
 """
 
 import logging
+import os
 import sys
 from typing import Optional
 from datetime import datetime
@@ -49,8 +50,10 @@ class SimpleLogger:
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)
         
-        # File handler
-        file_handler = logging.FileHandler('pipeline.log', encoding='utf-8')
+        # File handler — write to main/logs/ not the cwd
+        _log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+        os.makedirs(_log_dir, exist_ok=True)
+        file_handler = logging.FileHandler(os.path.join(_log_dir, 'pipeline.log'), encoding='utf-8')
         file_handler.setLevel(self.log_level)
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)

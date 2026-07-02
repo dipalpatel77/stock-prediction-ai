@@ -3,8 +3,12 @@
 Test script to check dynamic lookup and data processor
 """
 
-from services.angel_one_service import AngelOneService
-from pipeline.data_processor import DataProcessor
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from main.services.angel_one_service import AngelOneService
+from main.pipeline.data_processor import DataProcessor
 
 def test_dynamic_lookup():
     """Test dynamic lookup functionality"""

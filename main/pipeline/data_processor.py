@@ -11,12 +11,10 @@ import time
 import gc
 import psutil
 import asyncio
-import aiofiles
 from typing import Dict, Any, Optional, List, Generator, Tuple, AsyncGenerator
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
-from functools import lru_cache
 
 from .base_pipeline import BasePipelineComponent
 from ..services.data_service_wrapper import DataServiceWrapper
@@ -24,6 +22,7 @@ from ..services.angel_one_manager import AngelOneManager
 from ..services.database_manager import DatabaseManager
 from ..services.api_coordinator import APICoordinator
 from ..services.incremental_update_service import IncrementalUpdateService
+from ..utils.stock_utils import is_indian_stock, is_cache_fresh
 
 logger = logging.getLogger(__name__)
 
@@ -132,37 +131,11 @@ class DataProcessor(BasePipelineComponent):
         return ticker.upper() in indian_stocks
     
     def _is_indian_stock(self, ticker: str) -> bool:
-        """
-        Check if ticker is an Indian stock using dynamic lookup
-        
-        Args:
-            ticker: Stock ticker symbol
-            
-        Returns:
-            True if Indian stock, False otherwise
-        """
-        try:
-            # Use dynamic lookup to check if stock exists in Angel One symbols
-            if hasattr(self, 'angel_manager') and self.angel_manager:
-                # Check if Angel One service has dynamic lookup capability
-                if hasattr(self.angel_manager, 'angel_service') and hasattr(self.angel_manager.angel_service, 'dynamic_lookup'):
-                    token, exchange = self.angel_manager.angel_service.get_dynamic_token_and_exchange(ticker)
-                    if token and exchange:
-                        logger.info(f"Dynamic lookup found {ticker} as Indian stock: Token={token}, Exchange={exchange}")
-                        return True
-                    else:
-                        logger.info(f"Dynamic lookup did not find {ticker} in Indian stocks")
-                        return False
-                else:
-                    logger.warning("Angel One service does not have dynamic lookup capability")
-                    return False
-            else:
-                logger.warning("Angel One manager not available for dynamic lookup")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Failed to check if Indian stock using dynamic lookup: {e}")
-            return False
+        lookup = None
+        if hasattr(self, 'angel_manager') and self.angel_manager:
+            if hasattr(self.angel_manager, 'angel_service') and hasattr(self.angel_manager.angel_service, 'dynamic_lookup'):
+                lookup = self.angel_manager.angel_service.dynamic_lookup
+        return is_indian_stock(ticker, lookup)
     
     def _initialize_data_services(self):
         """Initialize data processing services"""
@@ -249,32 +222,28 @@ class DataProcessor(BasePipelineComponent):
             period = kwargs.get('period', '1y')
             interval = kwargs.get('interval', 'ONE_DAY')
             
-            # System now only supports Indian stocks
             # Ensure ticker is a string
             ticker_str = self.ticker if isinstance(self.ticker, str) else str(self.ticker)
-            
-            # Check if it's an Indian stock
-            if not self._is_indian_stock(ticker_str):
-                return self._handle_error(
-                    ValueError(f"Only Indian stocks are supported. {ticker_str} is not an Indian stock. Please use stocks like RELIANCE, TCS, INFY, etc."), 
-                    "Stock validation"
-                )
-            
-            print(f"\n📊 Loading data for {self.ticker} with intelligent caching (Indian stock)")
-            comprehensive_data = self._load_data_with_cache(period)
-            if comprehensive_data:
-                # Use ONE_DAY data as primary for processing
-                raw_data = comprehensive_data.get('ONE_DAY')
-                if raw_data is None or raw_data.empty:
-                    # Fallback to any available interval
-                    raw_data = next(iter(comprehensive_data.values()), None)
-                print(f"✅ Data loaded: {len(comprehensive_data)} intervals")
+            is_indian = self._is_indian_stock(ticker_str)
+            comprehensive_data = None  # only populated for Indian stocks
+
+            if is_indian:
+                print(f"\n📊 Loading data for {self.ticker} with intelligent caching (Indian stock)")
+                comprehensive_data = self._load_data_with_cache(period)
+                if comprehensive_data:
+                    # Use ONE_DAY data as primary for processing
+                    raw_data = comprehensive_data.get('ONE_DAY')
+                    if raw_data is None or raw_data.empty:
+                        raw_data = next(iter(comprehensive_data.values()), None)
+                    print(f"✅ Data loaded: {len(comprehensive_data)} intervals")
+                else:
+                    return self._handle_error(
+                        ValueError(f"No data available for {self.ticker}. Please check the stock symbol and try again."),
+                        "Data loading"
+                    )
             else:
-                # No fallback to sample data - fail completely when no Angel One data is available
-                return self._handle_error(
-                    ValueError(f"No data available for {self.ticker} in Angel One API. Please check if the stock symbol is correct and try again."), 
-                    "Data loading"
-                )
+                print(f"\n📊 Loading Yahoo Finance data for {self.ticker}")
+                raw_data = self._load_stock_data(period, interval)
             
             if raw_data is None or raw_data.empty:
                 return self._handle_error(ValueError("No data loaded"), "Data loading")
@@ -414,19 +383,7 @@ class DataProcessor(BasePipelineComponent):
             return None
     
     def _is_cache_fresh(self, data: pd.DataFrame, max_age_hours: int = 24) -> bool:
-        """Check if cached data is fresh enough"""
-        try:
-            if data.empty:
-                return False
-                
-            last_update = data.index.max()
-            age_hours = (datetime.now() - last_update).total_seconds() / 3600
-            
-            return age_hours < max_age_hours
-            
-        except Exception as e:
-            self._log_progress(f"Cache freshness check failed: {e}")
-            return False
+        return is_cache_fresh(data, max_age_hours)
     
     def _needs_incremental_update(self, cached_data: pd.DataFrame) -> bool:
         """Check if incremental update is needed"""
@@ -1252,60 +1209,12 @@ class DataProcessor(BasePipelineComponent):
             return data
     
     def _add_technical_indicators(self, data: pd.DataFrame, include_technical: bool = True) -> pd.DataFrame:
-        """
-        Add technical indicators to data
-        
-        Args:
-            data: Cleaned stock data
-            include_technical: Whether to include technical indicators
-            
-        Returns:
-            DataFrame with technical indicators
-        """
         try:
             if not include_technical or not self.technical_indicators:
                 self._log_progress("Skipping technical indicators")
                 return data
-            
             self._log_progress("Adding technical indicators")
-            
-            # Add basic technical indicators
-            enhanced_data = data.copy()
-            
-            # Simple Moving Averages
-            enhanced_data['SMA_20'] = enhanced_data['Close'].rolling(window=20).mean()
-            enhanced_data['SMA_50'] = enhanced_data['Close'].rolling(window=50).mean()
-            enhanced_data['SMA_200'] = enhanced_data['Close'].rolling(window=200).mean()
-            
-            # Exponential Moving Averages
-            enhanced_data['EMA_12'] = enhanced_data['Close'].ewm(span=12).mean()
-            enhanced_data['EMA_26'] = enhanced_data['Close'].ewm(span=26).mean()
-            
-            # MACD
-            enhanced_data['MACD'] = enhanced_data['EMA_12'] - enhanced_data['EMA_26']
-            enhanced_data['MACD_Signal'] = enhanced_data['MACD'].ewm(span=9).mean()
-            enhanced_data['MACD_Histogram'] = enhanced_data['MACD'] - enhanced_data['MACD_Signal']
-            
-            # RSI
-            delta = enhanced_data['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / loss
-            enhanced_data['RSI'] = 100 - (100 / (1 + rs))
-            
-            # Bollinger Bands
-            enhanced_data['BB_Middle'] = enhanced_data['Close'].rolling(window=20).mean()
-            bb_std = enhanced_data['Close'].rolling(window=20).std()
-            enhanced_data['BB_Upper'] = enhanced_data['BB_Middle'] + (bb_std * 2)
-            enhanced_data['BB_Lower'] = enhanced_data['BB_Middle'] - (bb_std * 2)
-            
-            # Volume indicators
-            enhanced_data['Volume_SMA'] = enhanced_data['Volume'].rolling(window=20).mean()
-            enhanced_data['Volume_Ratio'] = enhanced_data['Volume'] / enhanced_data['Volume_SMA']
-            
-            self._log_progress(f"Added technical indicators: {len(enhanced_data.columns)} columns")
-            return enhanced_data
-            
+            return self.technical_indicators.calculate_all_indicators(data)
         except Exception as e:
             self._log_progress(f"Technical indicators failed: {e}")
             return data

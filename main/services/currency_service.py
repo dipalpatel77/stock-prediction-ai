@@ -510,8 +510,8 @@ class CurrencyService:
             # Get currency trends
             trends = self._get_currency_trends()
             
-            # Get currency volatility
-            volatility = self.get_currency_volatility()
+            # Get currency volatility for USD (default base currency)
+            volatility = self.get_currency_volatility('USD')
             
             return {
                 'currency_rates': currency_rates,

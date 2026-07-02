@@ -16,13 +16,13 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 
-# Add main directory to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add project root to path (supports running from main/test/)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.angel_one_service import AngelOneService
-from services.database_manager import DatabaseManager
-from services.interval_manager import IntervalManager, PredictionHorizon
-from pipeline.model_trainer import ModelTrainer
+from main.services.angel_one_service import AngelOneService
+from main.services.database_manager import DatabaseManager
+from main.services.interval_manager import IntervalManager, PredictionHorizon
+from main.pipeline.model_trainer import ModelTrainer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

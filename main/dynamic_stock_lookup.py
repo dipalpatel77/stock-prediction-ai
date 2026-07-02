@@ -4,14 +4,19 @@ Dynamic Stock Lookup System for Angel One
 Finds any stock symbol in the angel_one_symbols.json and returns the equity token
 """
 
+import os
 import json
 import re
 from typing import Dict, List, Optional, Tuple
 
+# Default path is relative to this file's directory so it resolves correctly
+# regardless of the working directory when the app is launched.
+_DEFAULT_SYMBOLS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'angel_one_symbols.json')
+
 class DynamicStockLookup:
     """Dynamic stock lookup system for Angel One API"""
-    
-    def __init__(self, symbols_file: str = 'angel_one_symbols.json'):
+
+    def __init__(self, symbols_file: str = _DEFAULT_SYMBOLS_FILE):
         """Initialize with symbols file"""
         self.symbols_file = symbols_file
         self.symbols_data = None
@@ -176,6 +181,22 @@ class DynamicStockLookup:
         
         return None
     
+    def is_exact_match(self, stock_name: str) -> bool:
+        """
+        Return True only if the ticker has an EXACT symbol match in the Angel One database.
+        Does NOT use partial/fuzzy matching — used by _is_indian_stock to avoid false positives
+        where a US ticker like 'AAPL' matches Indian symbols like 'HARIAAPL'.
+        """
+        if not self.symbols_data:
+            return False
+        cleaned = self.clean_stock_name(stock_name)
+        for symbol in self.symbols_data:
+            sym = symbol.get('symbol', '').upper()
+            instrument_type = symbol.get('instrumenttype', '').upper()
+            if instrument_type in ['EQ', 'EQUITY', ''] and sym == cleaned:
+                return True
+        return False
+
     def get_token_and_exchange(self, stock_name: str) -> Tuple[Optional[str], Optional[str]]:
         """
         Get token and exchange for a stock

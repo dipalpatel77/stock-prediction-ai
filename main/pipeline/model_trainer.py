@@ -13,7 +13,6 @@ import joblib
 import os
 from pathlib import Path
 import warnings
-from contextlib import redirect_stderr
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import multiprocessing as mp
 from threading import Lock
@@ -255,8 +254,13 @@ class ModelTrainer(BasePipelineComponent):
         try:
             # Remove non-numeric columns and handle missing values
             numeric_data = data.select_dtypes(include=[np.number])
+            # Drop columns where more than half the values are NaN (e.g. SMA_200 with < 200 rows)
+            min_valid = max(len(numeric_data) // 2, 1)
+            numeric_data = numeric_data.dropna(axis=1, thresh=min_valid)
+            # Forward-fill then backward-fill remaining NaNs from window-based indicators
+            numeric_data = numeric_data.ffill().bfill()
             numeric_data = numeric_data.dropna()
-            
+
             if numeric_data.empty:
                 self.logger.error("No numeric data available")
                 return None, None
@@ -530,8 +534,7 @@ class ModelTrainer(BasePipelineComponent):
                     cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=cv_folds, scoring='r2')
                     cv_score = cv_scores.mean()
                 except Exception as e:
-                    # Log warning but don't fail the training
-                    pass
+                    logger.debug(f"Cross-validation skipped for model: {e}")
             
             # Feature importance
             feature_importance = {}

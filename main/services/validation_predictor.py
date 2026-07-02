@@ -341,11 +341,16 @@ class ValidationPredictor:
                 daily_data[f'sma_{window}'] = daily_data['Close'].rolling(window=window).mean()
                 daily_data[f'volatility_{window}'] = daily_data['Close'].rolling(window=window).std()
             
+            # Drop columns where more than half the values are NaN (e.g. SMA_200 with < 200 rows)
+            min_valid = max(len(daily_data) // 2, 1)
+            daily_data = daily_data.dropna(axis=1, thresh=min_valid)
+            # Forward-fill then backward-fill remaining NaNs from window-based indicators
+            daily_data = daily_data.ffill().bfill()
             # Remove rows with NaN values
             daily_data = daily_data.dropna()
-            
+
             return daily_data
-            
+
         except Exception as e:
             logger.error(f"Daily data preparation failed: {e}")
             return pd.DataFrame()

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Import interfaces
 from .angel_one_interface import AngelOneInterface
+from ..utils.stock_utils import is_indian_stock
 from .interactive_selector import InteractiveDataSelector
 from .input_validator import InputValidator
 
@@ -156,42 +157,7 @@ class UserInterface:
             return "AAPL"  # Default fallback
     
     def _is_indian_stock(self, ticker: str) -> bool:
-        """
-        Check if ticker is an Indian stock
-        
-        Args:
-            ticker: Stock ticker symbol
-            
-        Returns:
-            True if Indian stock, False otherwise
-        """
-        try:
-            # Indian stock indicators
-            indian_indicators = ['.NS', '.BO', '.NSE', '.BSE']
-            
-            for indicator in indian_indicators:
-                if ticker.endswith(indicator):
-                    return True
-            
-            # Check for common Indian stock patterns
-            indian_patterns = [
-                'RELIANCE', 'TCS', 'INFY', 'HDFC', 'ICICIBANK', 'SBIN', 'BHARTIARTL',
-                'PNB', 'BANK', 'SBI', 'AXIS', 'KOTAK', 'INDUS', 'FEDERAL', 'CANARA',
-                'WIPRO', 'HCL', 'TECHM', 'LT', 'ITC', 'ONGC', 'NTPC', 'POWERGRID',
-                'COALINDIA', 'TATAMOTORS', 'TATASTEEL', 'BAJFINANCE', 'BAJAJFINSV',
-                'MARUTI', 'HEROMOTOCO', 'EICHERMOT', 'M&M', 'TITAN', 'NESTLEIND',
-                'ULTRACEMCO', 'GRASIM', 'ADANIPORTS', 'ADANIENT', 'ADANIGREEN',
-                'SUNPHARMA', 'DRREDDY', 'CIPLA', 'DIVISLAB', 'BIOCON', 'LUPIN'
-            ]
-            for pattern in indian_patterns:
-                if pattern in ticker.upper():
-                    return True
-            
-            return False
-            
-        except Exception as e:
-            logger.error(f"Failed to check if Indian stock: {e}")
-            return False
+        return is_indian_stock(ticker)
     
     def _get_analysis_type(self) -> str:
         """Get analysis type from user"""

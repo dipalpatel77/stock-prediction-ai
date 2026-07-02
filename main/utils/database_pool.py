@@ -4,6 +4,7 @@ Database Connection Pool
 Provides efficient database connection management with pooling
 """
 
+import os
 import threading
 import time
 import logging
@@ -64,6 +65,18 @@ class DatabaseConnection:
         except Exception:
             return False
     
+    def cursor(self):
+        """Return a cursor on the underlying connection."""
+        return self.connection.cursor()
+
+    def commit(self):
+        """Commit the current transaction on the underlying connection."""
+        return self.connection.commit()
+
+    def rollback(self):
+        """Roll back the current transaction on the underlying connection."""
+        return self.connection.rollback()
+
     def close(self):
         """Close the connection"""
         try:
@@ -129,7 +142,12 @@ class DatabaseConnectionPool:
                 )
                 connection_type = 'mysql'
             else:  # SQLite
-                db_path = self.connection_config.get('database', 'data/stock_data.db')
+                _default_db = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    'data', 'stock_data.db'
+                )
+                db_path = self.connection_config.get('database', _default_db)
+                os.makedirs(os.path.dirname(db_path), exist_ok=True)
                 connection = sqlite3.connect(db_path, check_same_thread=False)
                 connection_type = 'sqlite'
             
